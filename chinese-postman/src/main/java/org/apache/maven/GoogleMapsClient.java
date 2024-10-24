@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class GoogleMapsClient {
-    private static final String API_KEY = "AIzaSyDAjupBek5LKKWH3kO_SpwrLSQkdzkREQI";
+    private static final String API_KEY = "";
     private static final OkHttpClient client = new OkHttpClient();
 
     public static double[] getCoordinates(String address) throws Exception {
