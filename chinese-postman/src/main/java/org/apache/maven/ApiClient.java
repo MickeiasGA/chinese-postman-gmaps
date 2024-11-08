@@ -60,70 +60,78 @@ public class ApiClient {
                 }
             }
         }
-        
+
         return streets;
     }
 
     public static Set<String> getIntersections(List<String> streets) throws Exception {
-        Set<String> intersections = new HashSet<>();
-        Set<String> checkedPairs = new HashSet<>(); // Armazena pares únicos de ruas
+    Set<String> intersections = new HashSet<>();
+    Set<String> checkedPairs = new HashSet<>();
 
-        for (int i = 0; i < streets.size(); i++) {
-            for (int j = i + 1; j < streets.size(); j++) {
-                String street1 = streets.get(i);
-                String street2 = streets.get(j);
+    for (int i = 0; i < streets.size(); i++) {
+        for (int j = i + 1; j < streets.size(); j++) {
+            String street1 = streets.get(i);
+            String street2 = streets.get(j);
 
-                // Cria uma chave única para cada par de ruas, ignorando a ordem
-                String pairKey = street1.compareTo(street2) < 0 ? street1 + "-" + street2 : street2 + "-" + street1;
-                if (checkedPairs.contains(pairKey)) continue; // Ignora pares já verificados
-                checkedPairs.add(pairKey);
+            String pairKey = street1.compareTo(street2) < 0 ? street1 + "-" + street2 : street2 + "-" + street1;
+            if (checkedPairs.contains(pairKey)) continue;
+            checkedPairs.add(pairKey);
 
-                String address = street1.replace(" ", "+") + "+%26+" + street2.replace(" ", "+");
-                
-                String url = String.format(
-                    "https://maps.googleapis.com/maps/api/geocode/json?address=%s&type=route&key=%s",
-                    address, API_KEY
-                );
+            String address = street1.replace(" ", "+") + "+%26+" + street2.replace(" ", "+");
 
-                Request request = new Request.Builder().url(url).build();
-                
-                try (Response response = client.newCall(request).execute()) {
-                    if (!response.isSuccessful()) {
-                        System.out.println("Erro na resposta da API para o cruzamento de " + street1 + " e " + street2);
-                        continue;
-                    }
+            String url = String.format(
+                "https://maps.googleapis.com/maps/api/geocode/json?address=%s&type=intersection&key=%s",
+                address, API_KEY
+            );
+            System.out.println();
+            System.out.println(url);
 
-                    String jsonResponse = response.body().string();
-                    var jsonObject = new JSONObject(jsonResponse);
+            Request request = new Request.Builder().url(url).build();
 
-                    JSONArray results = jsonObject.optJSONArray("results");
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    System.out.println("Erro na resposta da API para o cruzamento de " + street1 + " e " + street2);
+                    continue;
+                }
 
+                String jsonResponse = response.body().string();
+                var jsonObject = new JSONObject(jsonResponse);
+                JSONArray results = jsonObject.optJSONArray("results");
+
+                if (results != null && results.length() > 0) {
                     JSONObject result = results.getJSONObject(0);
                     String formattedAddress = result.optString("formatted_address", "");
                     System.out.println(formattedAddress);
-                    System.out.println();
+
+                    System.out.println(street1.replace("Rua ", "").trim());
+                    System.out.println(street2.replace("Rua ", "").trim());
                     
-                    // Confirma se o endereço contém os nomes de ambas as ruas
-                    if (formattedAddress.contains(street1.replace("Rua", "")) && formattedAddress.contains(street2.replace("Rua", ""))) {
+                    if (formattedAddress.contains(street1.replace("Rua", "").trim()) 
+                        && formattedAddress.contains(street2.replace("Rua", "").trim())) {
+                        
                         JSONObject location = result
                             .getJSONObject("geometry")
                             .getJSONObject("location");
-                        
+
                         double lat = location.getDouble("lat");
                         double lng = location.getDouble("lng");
                         intersections.add(String.format("Intersection of %s and %s at coordinates: (%f, %f)", street1, street2, lat, lng));
                         System.out.println("Cruzamento encontrado: " + street1 + " & " + street2 + " em (" + lat + ", " + lng + ")");
                     } else {
-                        System.out.println("Endereço formatado não contém ambas as ruas para " + street1 + " e " + street2);
+                        System.out.println("Endereço formatado não contém ambas " + street1.replace("Rua", "").trim() + " e " + street2.replace("Rua", "").trim());
                     }
-                } catch (Exception e) {
-                    System.out.println("Erro ao processar o cruzamento de " + street1 + " e " + street2 + ": " + e.getMessage());
+                } else {
+                    System.out.println("Nenhum resultado para " + street1 + " e " + street2);
                 }
+            } catch (Exception e) {
+                System.out.println("Erro ao processar o cruzamento de " + street1 + " e " + street2 + ": " + e.getMessage());
             }
         }
-
-        return intersections;
     }
+
+    return intersections;
+}
+
 
     public static void main(String[] args) throws Exception {
         double[] coords = getCoordinates("R. Angelina Cury Abdalla, 146 - Jardim Fernanda, Campinas - SP");
