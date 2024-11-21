@@ -16,6 +16,65 @@ public class APIClient {
         return apiKey;
     }
 
+    public static void drawRoute(List<double[]> coordinates, String outputPath) throws IOException {
+        if (coordinates == null || coordinates.isEmpty()) {
+            throw new IllegalArgumentException("Nenhum percurso encontrado para desenhar.");
+        }
+
+        // Construir o conteúdo do arquivo HTML
+        StringBuilder htmlContent = new StringBuilder();
+        htmlContent.append("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>OpenStreetMap Route</title>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            </head>
+            <body>
+                <div id="map" style="width: 100%; height: 100vh;"></div>
+                <script>
+                    var map = L.map('map').setView([%START_LAT%, %START_LON%], 15);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap'
+                    }).addTo(map);
+                    var polyline = L.polyline(%COORDS%, {color: 'blue'}).addTo(map);
+                    map.fitBounds(polyline.getBounds());
+                </script>
+            </body>
+            </html>
+        """);
+
+        // Substituir os placeholders no HTML com dados reais
+        double[] start = coordinates.get(0);
+        htmlContent = new StringBuilder(htmlContent.toString()
+                .replace("%START_LAT%", String.valueOf(start[0]))
+                .replace("%START_LON%", String.valueOf(start[1]))
+                .replace("%COORDS%", convertCoordinatesToJSArray(coordinates)));
+
+        // Salvar o conteúdo em um arquivo HTML
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            writer.write(htmlContent.toString());
+        }
+        System.out.println("Mapa gerado: " + outputPath);
+    }
+
+    // Método auxiliar para converter coordenadas em formato de array JS
+    private static String convertCoordinatesToJSArray(List<double[]> coordinates) {
+        StringBuilder jsArray = new StringBuilder("[");
+        for (double[] coord : coordinates) {
+            jsArray.append("[").append(coord[0]).append(",").append(coord[1]).append("],");
+        }
+        // Remover a última vírgula e fechar o array
+        jsArray.setLength(jsArray.length() - 1);
+        jsArray.append("]");
+        return jsArray.toString();
+    }
+
+
     public static double[] getCoordinates(String address) throws Exception {
         String url = "https://maps.googleapis.com/maps/api/geocode/json?address=" + address + "&key=" + apiKey;
 
@@ -185,6 +244,33 @@ public class APIClient {
 
         return intersections;
     }
+
+    public static double[] getNodeCoordinates(Long nodeId) {
+        String url = String.format("https://overpass-api.de/api/interpreter?data=[out:json];node(%d);out;", nodeId);
+    
+        Request request = new Request.Builder().url(url).build();
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Erro ao buscar coordenadas do nó: " + response);
+            }
+    
+            String jsonResponse = response.body().string();
+            var jsonObject = new JSONObject(jsonResponse);
+    
+            JSONArray elements = jsonObject.getJSONArray("elements");
+            if (elements.length() > 0) {
+                JSONObject node = elements.getJSONObject(0);
+                double lat = node.getDouble("lat");
+                double lon = node.getDouble("lon");
+                return new double[] { lat, lon };
+            } else {
+                System.err.println("Nenhum nó encontrado para o ID: " + nodeId);
+            }
+        } catch (IOException | JSONException e) {
+            e.printStackTrace();
+        }
+        return null; // Retorna nulo em caso de erro
+    }    
 
     public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap, Long nodeId1, Long nodeId2) {
         List<double[]> streetSegments = new ArrayList<>();
