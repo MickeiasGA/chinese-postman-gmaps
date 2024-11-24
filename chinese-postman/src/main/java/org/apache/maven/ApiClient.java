@@ -272,45 +272,72 @@ public class APIClient {
         return null; // Retorna nulo em caso de erro
     }    
 
-    public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap, Long nodeId1, Long nodeId2) {
-        List<double[]> streetSegments = new ArrayList<>();
-    
-        // Iterar sobre todas as ruas no mapa
-        for (var entry : streetDataMap.entrySet()) {
-            String streetName = (String) entry.getValue().get(0); // Nome da rua
-            List<Long> nodes = (List<Long>) entry.getValue().get(1); // Nós da rua
-    
-            // Verificar se os dois cruzamentos estão na mesma rua
-            if (nodes.contains(nodeId1) && nodes.contains(nodeId2)) {
-                // Encontrar os índices dos dois cruzamentos
-                int index1 = nodes.indexOf(nodeId1);
-                int index2 = nodes.indexOf(nodeId2);
-    
-                // Garantir que o índice menor seja o inicial
-                int startIndex = Math.min(index1, index2);
-                int endIndex = Math.max(index1, index2);
-    
-                // Adicionar segmentos de rua entre os cruzamentos
-                for (int i = startIndex; i < endIndex; i++) {
-                    Long startNode = nodes.get(i);
-                    Long endNode = nodes.get(i + 1);
-    
-                    // Obter coordenadas dos nós do segmento
-                    double[] startCoordinates = getNodeCoordinates(startNode);
-                    double[] endCoordinates = getNodeCoordinates(endNode);
-    
-                    if (startCoordinates != null && endCoordinates != null) {
-                        streetSegments.add(startCoordinates);
-                        streetSegments.add(endCoordinates);
-                    }
-                }
-    
-                // Ruptura, pois encontramos a rua que conecta os dois cruzamentos
-                break;
-            }
+    public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap,
+        Long nodeId1,
+        Long nodeId2,
+        String apiKey) {
+
+        // Coordenadas dos cruzamentos
+        double[] startCoordinates = getNodeCoordinates(nodeId1);
+        double[] endCoordinates = getNodeCoordinates(nodeId2);
+
+        if (startCoordinates != null && endCoordinates != null) {
+            // Obter a rota entre os cruzamentos usando o perfil de carro
+            return getRoute(startCoordinates, endCoordinates, apiKey, "driving-car");
+        } else {
+            System.err.println("Coordenadas inválidas para os cruzamentos.");
+            return new ArrayList<>();
         }
+    }
+
+    public static List<double[]> getRoute(double[] start, double[] end, String apiKey, String profile) {
+        String url = "https://api.openrouteservice.org/v2/directions/" + profile;
+        OkHttpClient client = new OkHttpClient();
     
-        return streetSegments;
+        try {
+            // Construir o JSON do corpo da requisição
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("coordinates", new JSONArray(Arrays.asList(
+                    new JSONArray(start),
+                    new JSONArray(end)
+            )));
+    
+            // Configurar a requisição HTTP
+            RequestBody body = RequestBody.create(
+                    requestBody.toString(),
+                    MediaType.get("application/json; charset=utf-8")
+            );
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .addHeader("Authorization", apiKey)
+                    .build();
+    
+            // Executar a requisição
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful())
+                    throw new IOException("Erro ao buscar rota: " + response);
+    
+                // Processar a resposta JSON
+                String jsonResponse = response.body().string();
+                JSONObject jsonObject = new JSONObject(jsonResponse);
+                JSONArray coordinates = jsonObject.getJSONArray("routes")
+                        .getJSONObject(0)
+                        .getJSONObject("geometry")
+                        .getJSONArray("coordinates");
+    
+                // Converter os dados de coordenadas para uma lista de double[]
+                List<double[]> route = new ArrayList<>();
+                for (int i = 0; i < coordinates.length(); i++) {
+                    JSONArray point = coordinates.getJSONArray(i);
+                    route.add(new double[]{point.getDouble(1), point.getDouble(0)});
+                }
+                return route;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
     }    
 
     // Função para construir a URL do Google Maps

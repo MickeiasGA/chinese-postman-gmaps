@@ -1,0 +1,15 @@
+2024-11-24 11:23:23 INFO [o.h.o.a.Application                     ] - Starting Application v8.2.0 using Java 17.0.11 with PID 5160 (C:\Users\Letícia\OneDrive\Documentos\GitHub\chinese-postman-gmaps\chinese-postman\ors.jar started by Letícia in C:\Users\Letícia\OneDrive\Documentos\GitHub\chinese-postman-gmaps\chinese-postman)
+2024-11-24 11:23:23 INFO [o.h.o.a.Application                     ] - The following 1 profile is active: "default"
+2024-11-24 11:23:23 INFO [o.h.o.a.ORSEnvironmentPostProcessor     ] - 
+2024-11-24 11:23:23 INFO [o.h.o.a.ORSEnvironmentPostProcessor     ] - Configuration lookup started.
+2024-11-24 11:23:23 INFO [o.h.o.a.ORSEnvironmentPostProcessor     ] - Configuration file lookup by default locations.
+2024-11-24 11:23:23 INFO [o.h.o.a.ORSEnvironmentPostProcessor     ] - Configuration lookup finished.
+2024-11-24 11:23:23 INFO [o.h.o.a.ORSEnvironmentPostProcessor     ] - 
+2024-11-24 11:23:30 INFO [o.h.o.a.s.l.ORSInitContextListener      ] - Initializing ORS...
+2024-11-24 11:23:30 INFO [o.h.o.r.RoutingProfileManager           ] - Total - 80 MB, Free - 48,14 MB, Max: 1,98 GB, Used - 31,86 MB
+2024-11-24 11:23:31 ERROR [o.h.o.r.RoutingProfileManager           ] - 
+2024-11-24 11:23:31 ERROR [o.h.o.r.RoutingProfileManager           ] - No profiles configured. Exiting.
+2024-11-24 11:23:31 ERROR [o.h.o.r.RoutingProfileManager           ] - 
+2024-11-24 11:23:33 INFO [o.h.o.a.Application                     ] - Started Application in 13.079 seconds (process running for 17.252)
+2024-11-24 11:23:33 INFO [o.h.o.a.Application                     ] - openrouteservice {"build_date":"2024-10-09T09:29:41Z","version":"8.2.0"}
+2024-11-24 11:23:34 INFO [o.h.o.a.s.l.ORSInitContextListener      ] - Shutting down openrouteservice {"build_date":"2024-10-09T09:29:41Z","version":"8.2.0"} and releasing resources.
