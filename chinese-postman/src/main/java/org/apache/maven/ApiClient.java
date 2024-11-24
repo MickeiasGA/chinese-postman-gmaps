@@ -373,37 +373,31 @@ public class APIClient {
     }
 
     public static void main(String[] args) throws Exception {
-        // Passo 1: Obtenha as coordenadas do local (exemplo estático ou fornecido pelo
-        // usuário)
         Scanner scanner = new Scanner(System.in);
-        //APIClient.apiKey = "AIzaSyDAjupBek5LKKWH3kO_SpwrLSQkdzkREQI";
         System.out.print("Insira o endereço central: ");
         String end = scanner.nextLine();
         System.out.print("Por favor, insira o raio de busca: ");
         int rad = scanner.nextInt();
-
         scanner.close();
-
+    
         double[] coords = getCoordinates(end);
-
-        // Passo 2: Obtenha as ruas e nós
+    
+        // Obtenha os dados das ruas e interseções
         Map<Long, List<Object>> streetDataMap = getStreetsWithNodes(coords[0], coords[1], rad);
-
-        // Imprime as ruas encontradas
-        System.out.println("Ruas na área:");
-        for (var entry : streetDataMap.entrySet()) {
-            Long wayId = entry.getKey();
-            String streetName = (String) entry.getValue().get(0);
-            System.out.println("Way ID: " + wayId + " - Street Name: " + streetName);
-        }
-
-        // Passo 3: Encontre interseções entre as vias
         Set<String> intersections = getIntersections(streetDataMap);
-
-        // Imprime as interseções encontradas
-        System.out.println("\nInterseções encontradas:");
-        for (String intersection : intersections) {
-            System.out.println(intersection);
-        }
+    
+        // API Key do OpenRouteService
+        String openRouteServiceKey = "SUA_API_KEY";
+    
+        // Exemplo: Calcular rota entre dois cruzamentos
+        Long nodeId1 = ...; // ID de um nó
+        Long nodeId2 = ...; // ID de outro nó
+        List<double[]> route = getStreetSegments(streetDataMap, nodeId1, nodeId2, openRouteServiceKey);
+    
+        // Gerar um mapa visual para a rota
+        drawRoute(route, "route.html");
+    
+        System.out.println("Mapa da rota gerado com sucesso.");
     }
+    
 }
