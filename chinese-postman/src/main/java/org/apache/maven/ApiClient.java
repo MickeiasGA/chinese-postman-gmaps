@@ -6,6 +6,8 @@ import org.json.*;
 import com.google.gson.*;
 
 import java.io.*;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class APIClient {
@@ -110,63 +112,65 @@ public class APIClient {
 
     public float getDistance(double lat1, double lon1, double lat2, double lon2) {
         try {
-            String url = "https://maps.googleapis.com/maps/api/distancematrix/json?origins=" 
-                         + lat1 + "," + lon1 + "&destinations=" + lat2 + "," + lon2 
-                         + "&key=" + apiKey;
-
+            // URL da API OSRM para cálculo de rota (modo "carro" como exemplo)
+            String url = "http://router.project-osrm.org/route/v1/driving/" 
+                         + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 
+                         + "?overview=false";
+    
             // Enviar requisição para a API
             String response = sendRequest(url);
-
-            // Parse a resposta JSON
-            JsonObject jsonObject = JsonParser.parseString(response).getAsJsonObject();
-            JsonArray rows = jsonObject.getAsJsonArray("rows");
-            JsonObject elements = rows.get(0).getAsJsonObject().getAsJsonArray("elements").get(0).getAsJsonObject();
-
-            int distance = elements.getAsJsonObject("distance").get("value").getAsInt();
-            return distance / 1000.0f;
-
+    
+            // Parse da resposta JSON
+            JSONObject jsonObject = new JSONObject(response);
+            JSONArray routes = jsonObject.getJSONArray("routes");
+    
+            if (routes.length() == 0) {
+                throw new Exception("Nenhuma rota encontrada entre as coordenadas.");
+            }
+    
+            JSONObject route = routes.getJSONObject(0);
+            float distance = route.getFloat("distance"); // Distância em metros
+    
+            return distance / 1000.0f; // Converter para quilômetros
+    
         } catch (Exception e) {
             e.printStackTrace();
             return -1;
         }
     }
+    
 
     public String getStreetName(double lat1, double lon1, double lat2, double lon2) {
         try {
-            // Construir a URL da API do Google Maps para obter as informações de rua
-            String url = "https://maps.googleapis.com/maps/api/directions/json?origin=" 
-                         + lat1 + "," + lon1 + "&destination=" + lat2 + "," + lon2 
-                         + "&key=" + apiKey;
+            String query = "[out:json];" +
+                        "way(around:50," + lat1 + "," + lon1 + ");" +
+                        "out tags;";
 
-            // Enviar requisição para a API
+            String url = "https://overpass-api.de/api/interpreter?data=" + 
+                        URLEncoder.encode(query, StandardCharsets.UTF_8);
+
             String response = sendRequest(url);
 
-            // Parse a resposta JSON
-            JsonObject jsonObject = JsonParser.parseString(response).getAsJsonObject();
-            JsonArray routes = jsonObject.getAsJsonArray("routes");
-            if (routes.size() > 0) {
-                JsonObject route = routes.get(0).getAsJsonObject();
-                JsonArray legs = route.getAsJsonArray("legs");
-                JsonObject leg = legs.get(0).getAsJsonObject();
-                JsonArray steps = leg.getAsJsonArray("steps");
+            JSONObject jsonObject = new JSONObject(response);
+            JSONArray elements = jsonObject.getJSONArray("elements");
 
-                // Retorna o nome da primeira rua encontrada no caminho
-                for (JsonElement step : steps) {
-                    JsonObject stepObject = step.getAsJsonObject();
-                    if (stepObject.has("street_name")) {
-                        return stepObject.get("street_name").getAsString();
-                    }
+            // Iterar pelos elementos retornados
+            for (int i = 0; i < elements.length(); i++) {
+                JSONObject element = elements.getJSONObject(i);
+                if (element.has("tags") && element.getJSONObject("tags").has("name")) {
+                    return element.getJSONObject("tags").getString("name");
                 }
             }
-            return "Rua Desconhecida"; // Caso não encontre o nome da rua
+
+            return "Rua Desconhecida";
 
         } catch (Exception e) {
             e.printStackTrace();
-            return "Erro ao obter nome da rua"; // Em caso de erro, retorna uma mensagem de erro
+            return "Erro ao obter nome da rua"; // Em caso de erro
         }
     }
 
-    // Método para enviar a requisição HTTP e retornar a resposta como uma string
+
     private String sendRequest(String urlString) throws IOException {
         Request request = new Request.Builder().url(urlString).build();
         try (Response response = client.newCall(request).execute()) {
@@ -282,46 +286,46 @@ public class APIClient {
 
     public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap, Long nodeId1, Long nodeId2) {
         List<double[]> streetSegments = new ArrayList<>();
-    
+        
         // Iterar sobre todas as ruas no mapa
         for (var entry : streetDataMap.entrySet()) {
-            String streetName = (String) entry.getValue().get(0); // Nome da rua
-            List<Long> nodes = (List<Long>) entry.getValue().get(1); // Nós da rua
-    
+            List<Object> streetData = entry.getValue();
+            List<Long> nodes = (List<Long>) streetData.get(1); // Nós da rua
+        
             // Verificar se os dois cruzamentos estão na mesma rua
             if (nodes.contains(nodeId1) && nodes.contains(nodeId2)) {
                 // Encontrar os índices dos dois cruzamentos
                 int index1 = nodes.indexOf(nodeId1);
                 int index2 = nodes.indexOf(nodeId2);
-    
+        
                 // Garantir que o índice menor seja o inicial
                 int startIndex = Math.min(index1, index2);
                 int endIndex = Math.max(index1, index2);
-    
+        
                 // Adicionar segmentos de rua entre os cruzamentos
                 for (int i = startIndex; i < endIndex; i++) {
                     Long startNode = nodes.get(i);
                     Long endNode = nodes.get(i + 1);
-    
+        
                     // Obter coordenadas dos nós do segmento
                     double[] startCoordinates = getNodeCoordinates(startNode);
                     double[] endCoordinates = getNodeCoordinates(endNode);
-    
+        
                     if (startCoordinates != null && endCoordinates != null) {
                         streetSegments.add(startCoordinates);
                         streetSegments.add(endCoordinates);
                     }
                 }
-    
+        
                 // Ruptura, pois encontramos a rua que conecta os dois cruzamentos
                 break;
             }
         }
-    
+        
         return streetSegments;
-    }    
+    }
+    
 
-    // Função para construir a URL do Google Maps
     public static String buildDirectionsUrl(List<double[]> coordinates) {
         if (coordinates == null || coordinates.size() < 2) {
             throw new IllegalArgumentException(
@@ -351,6 +355,41 @@ public class APIClient {
         }
 
         return urlBuilder.toString();
+    }
+
+    public static JSONObject createMultiLineString(List<List<double[]>> coordenadas) {
+        // Cria o objeto GeoJSON de MultiLineString
+        JSONObject multiLineString = new JSONObject();
+        multiLineString.put("type", "Feature");
+
+        // Cria a geometria como um MultiLineString
+        JSONObject geometry = new JSONObject();
+        geometry.put("type", "MultiLineString");
+
+        // Adiciona as coordenadas no formato esperado
+        JSONArray coordinates = new JSONArray();
+        for (List<double[]> linha : coordenadas) {
+            JSONArray linhaArray = new JSONArray();
+            for (double[] coordenada : linha) {
+                // Adiciona cada coordenada (x, y) no formato [longitude, latitude]
+                JSONArray coord = new JSONArray();
+                coord.put(coordenada[0]); // longitude
+                coord.put(coordenada[1]); // latitude
+                linhaArray.put(coord);
+            }
+            coordinates.put(linhaArray);
+        }
+        geometry.put("coordinates", coordinates);
+
+        // Define as propriedades (pode ser expandido conforme necessário)
+        JSONObject properties = new JSONObject();
+        properties.put("description", "Coordenadas de exemplo");
+
+        // Adiciona a geometria e propriedades no objeto de feature
+        multiLineString.put("geometry", geometry);
+        multiLineString.put("properties", properties);
+
+        return multiLineString;
     }
 
     public static void main(String[] args) throws Exception {
