@@ -160,11 +160,6 @@ public class RealWorldChinesePostman {
         return ciclo;
     }
 
-    public String gerarUrlCaminhoCompleto() {
-        List<double[]> coordenadasPercurso = resolverProblema();
-        return APIClient.buildDirectionsUrl(coordenadasPercurso);
-    }
-
     public void desenharPercurso() {
         if (percurso == null || percurso.isEmpty()) {
             System.out.println("Nenhum percurso calculado para desenhar.");
@@ -205,9 +200,6 @@ public class RealWorldChinesePostman {
                     problema.adicionarRua(i, j);
                 }
             }
-
-            String urlCaminho = problema.gerarUrlCaminhoCompleto();
-            System.out.println("URL do percurso completo no Google Maps: " + urlCaminho);
 
             problema.desenharPercurso();
         } finally {

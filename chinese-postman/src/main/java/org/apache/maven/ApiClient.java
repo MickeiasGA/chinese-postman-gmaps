@@ -17,64 +17,6 @@ public class APIClient {
             return apiKey;
         }
     
-        public static void drawRoute(List<double[]> coordinates, String outputPath) throws IOException {
-            if (coordinates == null || coordinates.isEmpty()) {
-                throw new IllegalArgumentException("Nenhum percurso encontrado para desenhar.");
-            }
-    
-            // Construir o conteúdo do arquivo HTML
-            StringBuilder htmlContent = new StringBuilder();
-            htmlContent.append("""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>OpenStreetMap Route</title>
-                    <meta charset="utf-8" />
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                </head>
-                <body>
-                    <div id="map" style="width: 100%; height: 100vh;"></div>
-                    <script>
-                        var map = L.map('map').setView([%START_LAT%, %START_LON%], 15);
-                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                            maxZoom: 19,
-                            attribution: '© OpenStreetMap'
-                        }).addTo(map);
-                        var polyline = L.polyline(%COORDS%, {color: 'blue'}).addTo(map);
-                        map.fitBounds(polyline.getBounds());
-                    </script>
-                </body>
-                </html>
-            """);
-    
-            // Substituir os placeholders no HTML com dados reais
-            double[] start = coordinates.get(0);
-            htmlContent = new StringBuilder(htmlContent.toString()
-                    .replace("%START_LAT%", String.valueOf(start[0]))
-                    .replace("%START_LON%", String.valueOf(start[1]))
-                    .replace("%COORDS%", convertCoordinatesToJSArray(coordinates)));
-    
-            // Salvar o conteúdo em um arquivo HTML
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
-                writer.write(htmlContent.toString());
-            }
-            System.out.println("Mapa gerado: " + outputPath);
-        }
-    
-        // Método auxiliar para converter coordenadas em formato de array JS
-        private static String convertCoordinatesToJSArray(List<double[]> coordinates) {
-            StringBuilder jsArray = new StringBuilder("[");
-            for (double[] coord : coordinates) {
-                jsArray.append("[").append(coord[0]).append(",").append(coord[1]).append("],");
-            }
-            // Remover a última vírgula e fechar o array
-            jsArray.setLength(jsArray.length() - 1);
-            jsArray.append("]");
-            return jsArray.toString();
-        }
-    
     
         public static double[] getCoordinates(String address) throws Exception {
             String url = "https://maps.googleapis.com/maps/api/geocode/json?address=" + address + "&key=" + apiKey;
@@ -396,38 +338,204 @@ public class APIClient {
                 e.printStackTrace();
                 return null;
             }
-        }    
+        }
     
-        // Função para construir a URL do Google Maps
-        public static String buildDirectionsUrl(List<double[]> coordinates) {
-            if (coordinates == null || coordinates.size() < 2) {
-                throw new IllegalArgumentException(
-                        "A lista de coordenadas deve ter pelo menos um ponto de partida e um destino.");
+        public static void drawRoute(List<double[]> coordinates, String outputPath) throws IOException {
+            if (coordinates == null || coordinates.isEmpty()) {
+                throw new IllegalArgumentException("Nenhum percurso encontrado para desenhar.");
             }
     
-            StringBuilder urlBuilder = new StringBuilder("https://www.google.com/maps/dir/?api=1");
+            // Construir o conteúdo do arquivo HTML
+            StringBuilder htmlContent = new StringBuilder();
+            htmlContent.append("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>OpenStreetMap Route</title>
+                    <meta charset="utf-8" />
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                </head>
+                <body>
+                    <div id="map" style="width: 100%; height: 100vh;"></div>
+                    <script>
+                        var map = L.map('map').setView([%START_LAT%, %START_LON%], 15);
+                        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                            maxZoom: 19,
+                            attribution: '© OpenStreetMap'
+                        }).addTo(map);
+                        var polyline = L.polyline(%COORDS%, {color: 'blue'}).addTo(map);
+                        map.fitBounds(polyline.getBounds());
+                    </script>
+                </body>
+                </html>
+            """);
     
-            // Ponto de partida
+            // Substituir os placeholders no HTML com dados reais
             double[] start = coordinates.get(0);
-            urlBuilder.append("&origin=").append(start[0]).append(",").append(start[1]);
+            htmlContent = new StringBuilder(htmlContent.toString()
+                    .replace("%START_LAT%", String.valueOf(start[0]))
+                    .replace("%START_LON%", String.valueOf(start[1]))
+                    .replace("%COORDS%", convertCoordinatesToJSArray(coordinates)));
     
-            // Destino final
-            double[] end = coordinates.get(coordinates.size() - 1);
-            urlBuilder.append("&destination=").append(end[0]).append(",").append(end[1]);
-    
-            // Paradas intermediárias
-            if (coordinates.size() > 2) {
-                urlBuilder.append("&waypoints=");
-                for (int i = 1; i < coordinates.size() - 1; i++) {
-                    double[] waypoint = coordinates.get(i);
-                    urlBuilder.append(waypoint[0]).append(",").append(waypoint[1]);
-                    if (i < coordinates.size() - 2) {
-                        urlBuilder.append("|");
-                    }
-                }
+            // Salvar o conteúdo em um arquivo HTML
+            try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+                writer.write(htmlContent.toString());
             }
+            System.out.println("Mapa gerado: " + outputPath);
+        }
     
-            return urlBuilder.toString();
+        public static void generateRouteAndDrawMap(double[] start, double[] end, String apiKey, String profile, String outputPath) throws IOException {
+            // Construção da URL e do cliente HTTP
+            String url = "https://api.openrouteservice.org/v2/directions/" + profile;
+            OkHttpClient client = new OkHttpClient();
+        
+            try {
+                // Criar o corpo da requisição com as coordenadas
+                JSONObject requestBody = new JSONObject();
+                requestBody.put("coordinates", new JSONArray(Arrays.asList(
+                        new JSONArray(start),
+                        new JSONArray(end)
+                )));
+                RequestBody body = RequestBody.create(
+                        requestBody.toString(),
+                        MediaType.get("application/json; charset=utf-8")
+                );
+                Request request = new Request.Builder()
+                        .url(url)
+                        .post(body)
+                        .addHeader("Authorization", apiKey)
+                        .build();
+        
+                // Executar a requisição e processar a resposta
+                try (Response response = client.newCall(request).execute()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Erro ao buscar rota: " + response);
+                    }
+        
+                    String jsonResponse = response.body().string();
+                    JSONObject jsonObject = new JSONObject(jsonResponse);
+                    System.out.println(jsonObject);
+                    JSONArray coordinates = jsonObject.getJSONArray("features")
+                            .getJSONObject(0)
+                            .getJSONObject("geometry")
+                            .getJSONArray("coordinates");
+        
+                    // Converter as coordenadas para formato de lista de pares [lat, lon]
+                    List<double[]> routeCoordinates = new ArrayList<>();
+                    for (int i = 0; i < coordinates.length(); i++) {
+                        JSONArray point = coordinates.getJSONArray(i);
+                        routeCoordinates.add(new double[]{point.getDouble(1), point.getDouble(0)});
+                    }
+        
+                    // Geração do HTML com o mapa
+                    StringBuilder htmlContent = new StringBuilder();
+                    htmlContent.append("""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>OpenStreetMap Route</title>
+                            <meta charset="utf-8" />
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        </head>
+                        <body>
+                            <div id="map" style="width: 100%; height: 100vh;"></div>
+                            <script>
+                                var map = L.map('map').setView([%START_LAT%, %START_LON%], 15);
+                                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                                    maxZoom: 19,
+                                    attribution: '© OpenStreetMap'
+                                }).addTo(map);
+                                var polyline = L.polyline(%COORDS%, {color: 'blue'}).addTo(map);
+                                map.fitBounds(polyline.getBounds());
+                            </script>
+                        </body>
+                        </html>
+                    """);
+        
+                    double[] firstCoordinate = routeCoordinates.get(0);
+                    htmlContent = new StringBuilder(htmlContent.toString()
+                            .replace("%START_LAT%", String.valueOf(firstCoordinate[0]))
+                            .replace("%START_LON%", String.valueOf(firstCoordinate[1]))
+                            .replace("%COORDS%", convertCoordinatesToJSArray(routeCoordinates)));
+        
+                    // Salvar o HTML no caminho especificado
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+                        writer.write(htmlContent.toString());
+                    }
+                    System.out.println("Mapa gerado: " + outputPath);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        public static void getRouteAndSaveToFile(double[] start, double[] end, String apiKey, String outputPath) throws IOException {
+            String url = "https://api.openrouteservice.org/v2/directions/driving-car";
+            OkHttpClient client = new OkHttpClient();
+            
+            try {
+                // Preparar o corpo da requisição
+                JSONObject requestBody = new JSONObject();
+                requestBody.put("coordinates", new JSONArray(Arrays.asList(
+                        new JSONArray(start),
+                        new JSONArray(end)
+                )));
+                
+                RequestBody body = RequestBody.create(
+                        requestBody.toString(),
+                        MediaType.get("application/json; charset=utf-8")
+                );
+                
+                // Enviar a requisição
+                Request request = new Request.Builder()
+                        .url(url)
+                        .post(body)
+                        .addHeader("Authorization", apiKey)
+                        .build();
+                
+                try (Response response = client.newCall(request).execute()) {
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Erro ao buscar rota: " + response);
+                    }
+                    
+                    String jsonResponse = response.body().string();
+                    JSONObject jsonObject = new JSONObject(jsonResponse);
+                    
+                    // Obter as coordenadas da rota
+                    JSONArray coordinates = jsonObject.getJSONArray("features")
+                            .getJSONObject(0)
+                            .getJSONObject("geometry")
+                            .getJSONArray("coordinates");
+                    
+                    // Salvar as coordenadas em um arquivo .txt
+                    try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+                        for (int i = 0; i < coordinates.length(); i++) {
+                            JSONArray point = coordinates.getJSONArray(i);
+                            writer.write(point.getDouble(1) + "," + point.getDouble(0)); // Latitude, Longitude
+                            writer.newLine();
+                        }
+                    }
+                    
+                    System.out.println("Rota salva em: " + outputPath);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }        
+        
+        // Método auxiliar para converter coordenadas para formato JavaScript
+        private static String convertCoordinatesToJSArray(List<double[]> coordinates) {
+            StringBuilder jsArray = new StringBuilder("[");
+            for (double[] coord : coordinates) {
+                jsArray.append("[").append(coord[0]).append(",").append(coord[1]).append("],");
+            }
+            jsArray.setLength(jsArray.length() - 1); // Remover a última vírgula
+            jsArray.append("]");
+            return jsArray.toString();
         }
     
         /**
@@ -478,11 +586,7 @@ public class APIClient {
                 String responseBody = response.body().string();
                 JSONObject jsonResponse = new JSONObject(responseBody);
     
-                if (!jsonResponse.has("features")) {
-                    throw new JSONException("A resposta JSON não contém a chave 'features'." + jsonResponse);
-                }
-    
-                JSONArray features = jsonResponse.getJSONArray("features");
+                JSONArray features = jsonResponse.getJSONArray("geometry");
     
                 // Combinar as features retornadas
                 for (int j = 0; j < features.length(); j++) {
@@ -552,19 +656,12 @@ public class APIClient {
 
     public static void main(String[] args) {
         try {
-            // Lista de pares de coordenadas [lon, lat]
-            List<double[]> coordinates = List.of(
-                    new double[]{-43.1729, -22.9068}, // Rio de Janeiro
-                    new double[]{-46.6333, -23.5505}, // São Paulo
-                    new double[]{-51.9253, -14.2350}  // Brasília
-            );
-
-            // Criar o GeoJSON com o percurso
-            JSONObject geoJson = createRoute(coordinates);
-
-            // Salvar o GeoJSON em um arquivo
-            saveGeoJsonToFile(geoJson, "caminho.geojson");
-
+            double[] start = {-47.1316262, -23.0461230}; // Rio de Janeiro
+            double[] end = {-47.1295653, -23.0465945};   // São Paulo
+            String profile = "foot-walking";       // Perfil de rota
+            String outputPath = "rota.html";      // Caminho do arquivo HTML
+    
+            generateRouteAndDrawMap(start, end, ORS_KEY, profile, outputPath);
         } catch (Exception e) {
             e.printStackTrace();
         }
