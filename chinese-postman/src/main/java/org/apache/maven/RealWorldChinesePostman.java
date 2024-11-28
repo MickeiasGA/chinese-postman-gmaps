@@ -168,7 +168,7 @@ public class RealWorldChinesePostman {
 
         try {
             String outputPath = "percurso.html";
-            APIClient.drawRoute(percurso, outputPath);
+            //APIClient.drawRoute(percurso, outputPath);
 
             File htmlFile = new File(outputPath);
             if (htmlFile.exists()) {

@@ -1,0 +1,22 @@
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Mapa com Percurso</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    </head>
+    <body>
+        <div id="map" style="width: 100%; height: 100vh;"></div>
+        <script>
+            var map = L.map('map').setView([-43.1729, -22.9068], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+            var polyline = L.polyline([[-43.1729,-22.9068], [-46.6333,-23.5505], [-51.9253,-14.235]], {color: 'blue'}).addTo(map);
+            map.fitBounds(polyline.getBounds());
+        </script>
+    </body>
+    </html>
