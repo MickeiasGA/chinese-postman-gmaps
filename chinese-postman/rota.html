@@ -1,0 +1,22 @@
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>OpenStreetMap Route</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    </head>
+    <body>
+        <div id="map" style="width: 100%; height: 100vh;"></div>
+        <script>
+            var map = L.map('map').setView([-23.04613, -47.13162], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '© OpenStreetMap'
+            }).addTo(map);
+            var polyline = L.polyline([[-23.04613, -47.13162], [-23.04613, -47.13163], [-23.0465, -47.13126], [-23.04667, -47.13102], [-23.04677, -47.13078], [-23.04684, -47.13055], [-23.04686, -47.13021], [-23.04683, -47.12993], [-23.04676, -47.12974], [-23.04664, -47.12951], [-23.04659, -47.12956]], {color: 'blue'}).addTo(map);
+            map.fitBounds(polyline.getBounds());
+        </script>
+    </body>
+    </html>
