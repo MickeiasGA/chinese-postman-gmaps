@@ -53,15 +53,15 @@ public class ApiClient {
     } */
 
     public static float getDistance(double lat1, double lon1, double lat2, double lon2) throws IOException {
+        // Forçar o uso de Locale.US para garantir o formato correto do decimal
         String url = String.format(
-            "http://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?overview=false",
-            lon1, lat1, lon2, lat2
+            Locale.US,
+            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
     
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
                 .url(url)
-                //.addHeader("User-Agent", "YourAppName")
                 .build();
     
         try (Response response = client.newCall(request).execute()) {
@@ -81,15 +81,16 @@ public class ApiClient {
             double distanceMeters = route.getDouble("distance");
             return (float) (distanceMeters / 1000.0); // Converter para quilômetros
         }
-    }
+    }    
     
-
     // Método para obter o nome da rua entre dois pontos geográficos
     public static String getStreetName(double lat1, double lon1, double lat2, double lon2) throws IOException {
         String url = String.format(
-            "http://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?steps=true&overview=false",
+            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?steps=true&overview=false",
             lon1, lat1, lon2, lat2
         );
+
+        url.replaceAll(",(?=[0-9]+,)", "").replaceAll(",", ".");
     
         OkHttpClient client = new OkHttpClient();
         Request request = new Request.Builder()
@@ -537,7 +538,7 @@ public class ApiClient {
             // Salvar o percurso como GeoJSON
             saveRouteAsGeoJSON(coordinates, profile, geoJSONOutputPath); */
 
-            String neighborhood = "Núcleo Residencial Jardim Líria";
+            String neighborhood = "Núcleo Residencial Jardim Fernanda";
             String city = "Campinas";
             long areaId = getAreaIdByName(neighborhood, city);
 

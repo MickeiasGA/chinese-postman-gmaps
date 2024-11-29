@@ -32,10 +32,10 @@ public class RealWorldChinesePostman {
             Map<Long, List<Object>> streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);
             Set<String> intersections = ApiClient.getIntersections(streetDataMap);
 
-            System.out.println("\nInterseções encontradas:");
+            System.out.println("\nInterseções encontradas:" + intersections.size());
             for (String intersection : intersections) {
-                System.out.println(intersection);
-                Long nodeId = extractNodeId(intersection);
+                //System.out.println(intersection);
+                Long nodeId = encontrarIdNo(intersection);
                 if (nodeId != null) {
                     double[] coordenadas = ApiClient.getNodeCoordinates(nodeId);
                     if (coordenadas != null) {
@@ -48,14 +48,13 @@ public class RealWorldChinesePostman {
             this.arcos = new int[N][N];
             this.custos = new float[N][N];
             this.nomesRuas = new String[N][N];
-            System.out.println("Cruzamentos descobertos: " + N);
         } catch (Exception e) {
             System.err.println("Erro ao descobrir cruzamentos: " + e.getMessage());
             e.printStackTrace();
         }
     }
 
-    private Long extractNodeId(String intersection) {
+    private Long encontrarIdNo(String intersection) {
         try {
             String idPart = intersection.split(":")[1].trim().split(" ")[0];
             return Long.parseLong(idPart);
@@ -70,18 +69,56 @@ public class RealWorldChinesePostman {
         double[] pontoDestino = cruzamentos.get(destino);
 
         float distancia = 0.0f;
-        String nomeRua = "";
+        //String nomeRua = "";
         try {
             distancia = ApiClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
-            nomeRua = ApiClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+            //nomeRua = ApiClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
         arcos[origem][destino]++;
         custos[origem][destino] = distancia;
-        nomesRuas[origem][destino] = nomeRua;
+        //nomesRuas[origem][destino] = nomeRua;
     }
+
+    public void adicionarRuas() {
+        try {
+            // Utiliza um Map para armazenar distâncias previamente calculadas
+            Map<String, Float> distanciasCalculadas = new HashMap<>();
+    
+            for (int i = 0; i < cruzamentos.size(); i++) {
+                for (int j = i + 1; j < cruzamentos.size(); j++) { // Apenas combinações únicas
+                    double[] pontoOrigem = cruzamentos.get(i);
+                    double[] pontoDestino = cruzamentos.get(j);
+    
+                    // Cria uma chave única para o par de cruzamentos
+                    String chavePar = i + "-" + j;
+    
+                    // Verifica se a distância já foi calculada
+                    if (!distanciasCalculadas.containsKey(chavePar)) {
+                        float distancia = ApiClient.getDistance(
+                            pontoOrigem[0], pontoOrigem[1],
+                            pontoDestino[0], pontoDestino[1]
+                        );
+    
+                        distanciasCalculadas.put(chavePar, distancia);
+                    }
+    
+                    // Recupera a distância calculada
+                    float distancia = distanciasCalculadas.get(chavePar);
+    
+                    // Atualiza as matrizes
+                    arcos[i][j]++;
+                    arcos[j][i]++; // Grafo não direcionado (caso aplicável)
+                    custos[i][j] = distancia;
+                    custos[j][i] = distancia; // Simetria
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }    
 
     public List<double[]> resolverProblema() {
         int[] delta = new int[N];
@@ -190,7 +227,7 @@ public class RealWorldChinesePostman {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
         RealWorldChinesePostman problema = new RealWorldChinesePostman();
         Scanner scanner = new Scanner(System.in);
 
@@ -202,11 +239,16 @@ public class RealWorldChinesePostman {
 
             problema.descobrirCruzamentosPorBairro(bairro, cidade);
 
-            for (int i = 0; i < problema.N; i++) {
-                for (int j = i + 1; j < problema.N; j++) {
-                    problema.adicionarRua(i, j);
-                }
-            }
+            // for (int i = 0; i < problema.N; i++) {
+            //     for (int j = i + 1; j < problema.N; j++) {
+            //         problema.adicionarRua(i, j);
+            //         System.out.println(cidade);
+            //     }
+            // }
+
+            problema.adicionarRuas();
+
+            problema.resolverProblema();
 
             System.out.print("Digite o arquivo para guardar o percurso: ");
             String arquivo = scanner.nextLine();
