@@ -1,6 +1,7 @@
 package org.apache.maven;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 public class RealWorldChinesePostman {
@@ -8,27 +9,26 @@ public class RealWorldChinesePostman {
     private int[][] arcos; // Matriz de adjacência para contagem de ruas entre cruzamentos
     private float[][] custos; // Custos das ruas (distância entre cruzamentos)
     private String[][] nomesRuas; // Nome das ruas entre cruzamentos
-    private APIClient apiClient;
+    private static APIClient apiClient;
     private List<double[]> cruzamentos; // Lista de cruzamentos como coordenadas GPS
-    private List<double[]> percurso; // Coordenadas do percurso calculado
+    private static List<double[]> percurso; // Coordenadas do percurso calculado
 
     public RealWorldChinesePostman() {
         this.arcos = null;
         this.custos = null;
         this.nomesRuas = null;
         this.cruzamentos = new ArrayList<>();
-        this.percurso = new ArrayList<>();
-        this.apiClient = new APIClient();
+        RealWorldChinesePostman.percurso = new ArrayList<>();
+        RealWorldChinesePostman.apiClient = new APIClient();
     }
 
     public void adicionarCruzamento(double[] coordenadas) {
         cruzamentos.add(coordenadas);
     }
 
-    public void descobrirCruzamentosPorRaio(String enderecoInicial, double raio) {
+    public void descobrirCruzamentosPorBairro(String bairro, String cidade) {
         try {
-            double[] coordenadasIniciais = APIClient.getCoordinates(enderecoInicial);
-            Map<Long, List<Object>> streetDataMap = APIClient.getStreetsWithNodes(coordenadasIniciais[0], coordenadasIniciais[1], raio);
+            Map<Long, List<Object>> streetDataMap = APIClient.getStreetsWithNodesInNeighborhood(bairro, cidade);
             Set<String> intersections = APIClient.getIntersections(streetDataMap);
 
             System.out.println("\nInterseções encontradas:");
@@ -68,8 +68,14 @@ public class RealWorldChinesePostman {
         double[] pontoOrigem = cruzamentos.get(origem);
         double[] pontoDestino = cruzamentos.get(destino);
 
-        float distancia = apiClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
-        String nomeRua = apiClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+        float distancia = 0.0f;
+        String nomeRua = "";
+        try {
+            distancia = APIClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+            nomeRua = APIClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         arcos[origem][destino]++;
         custos[origem][destino] = distancia;
@@ -122,7 +128,7 @@ public class RealWorldChinesePostman {
             percursoCoordenadas.add(cruzamentos.get(indice));
         }
 
-        this.percurso = percursoCoordenadas;
+        RealWorldChinesePostman.percurso = percursoCoordenadas;
         return percursoCoordenadas;
     }
 
@@ -188,12 +194,12 @@ public class RealWorldChinesePostman {
         Scanner scanner = new Scanner(System.in);
 
         try {
-            System.out.print("Digite o endereço inicial: ");
-            String enderecoInicial = scanner.nextLine();
-            System.out.print("Digite o raio em metros para buscar cruzamentos: ");
-            double raio = scanner.nextDouble();
+            System.out.print("Digite o bairro: ");
+            String bairro = scanner.nextLine();
+            System.out.print("Digite a cidade: ");
+            String cidade = scanner.nextLine();
 
-            problema.descobrirCruzamentosPorRaio(enderecoInicial, raio);
+            problema.descobrirCruzamentosPorBairro(bairro, cidade);
 
             for (int i = 0; i < problema.N; i++) {
                 for (int j = i + 1; j < problema.N; j++) {
@@ -201,7 +207,16 @@ public class RealWorldChinesePostman {
                 }
             }
 
-            problema.desenharPercurso();
+            System.out.print("Digite o arquivo para guardar o percurso: ");
+            String arquivo = scanner.nextLine();
+
+            try {
+                APIClient.saveRouteAsGeoJSON(percurso, "driving-car",arquivo);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            //problema.desenharPercurso();
         } finally {
             scanner.close();
         }
