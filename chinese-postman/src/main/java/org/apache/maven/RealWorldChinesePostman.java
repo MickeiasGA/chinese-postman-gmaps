@@ -9,7 +9,7 @@ public class RealWorldChinesePostman {
     private int[][] arcos; // Matriz de adjacência para contagem de ruas entre cruzamentos
     private float[][] custos; // Custos das ruas (distância entre cruzamentos)
     private String[][] nomesRuas; // Nome das ruas entre cruzamentos
-    private static APIClient apiClient;
+    private static ApiClient apiClient;
     private List<double[]> cruzamentos; // Lista de cruzamentos como coordenadas GPS
     private static List<double[]> percurso; // Coordenadas do percurso calculado
 
@@ -19,7 +19,7 @@ public class RealWorldChinesePostman {
         this.nomesRuas = null;
         this.cruzamentos = new ArrayList<>();
         RealWorldChinesePostman.percurso = new ArrayList<>();
-        RealWorldChinesePostman.apiClient = new APIClient();
+        RealWorldChinesePostman.apiClient = new ApiClient();
     }
 
     public void adicionarCruzamento(double[] coordenadas) {
@@ -28,15 +28,16 @@ public class RealWorldChinesePostman {
 
     public void descobrirCruzamentosPorBairro(String bairro, String cidade) {
         try {
-            Map<Long, List<Object>> streetDataMap = APIClient.getStreetsWithNodesInNeighborhood(bairro, cidade);
-            Set<String> intersections = APIClient.getIntersections(streetDataMap);
+            Long id = ApiClient.getAreaIdByName(bairro, cidade);
+            Map<Long, List<Object>> streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);
+            Set<String> intersections = ApiClient.getIntersections(streetDataMap);
 
             System.out.println("\nInterseções encontradas:");
             for (String intersection : intersections) {
                 System.out.println(intersection);
                 Long nodeId = extractNodeId(intersection);
                 if (nodeId != null) {
-                    double[] coordenadas = APIClient.getNodeCoordinates(nodeId);
+                    double[] coordenadas = ApiClient.getNodeCoordinates(nodeId);
                     if (coordenadas != null) {
                         cruzamentos.add(coordenadas);
                     }
@@ -71,8 +72,8 @@ public class RealWorldChinesePostman {
         float distancia = 0.0f;
         String nomeRua = "";
         try {
-            distancia = APIClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
-            nomeRua = APIClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+            distancia = ApiClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
+            nomeRua = ApiClient.getStreetName(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -211,7 +212,7 @@ public class RealWorldChinesePostman {
             String arquivo = scanner.nextLine();
 
             try {
-                APIClient.saveRouteAsGeoJSON(percurso, "driving-car",arquivo);
+                ApiClient.saveRouteAsGeoJSON(percurso, "driving-car",arquivo);
             } catch (IOException e) {
                 e.printStackTrace();
             }

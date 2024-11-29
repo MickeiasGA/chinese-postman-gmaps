@@ -11,7 +11,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
-public class APIClient {
+public class ApiClient {
     private static final String apiKey = "AIzaSyDAjupBek5LKKWH3kO_SpwrLSQkdzkREQI";
     private static final OkHttpClient client = new OkHttpClient();
     private static final String ORS_KEY = "5b3ce3597851110001cf62482742d40a8da74524acffc107da4c6d97";
@@ -125,46 +125,78 @@ public class APIClient {
         }
     }
 
-    public static Map<Long, List<Object>> getStreetsWithNodesInNeighborhood(String neighborhood, String city) throws Exception {
+    public static long getAreaIdByName(String placeName, String cityName) throws Exception {
         // Construir a consulta Overpass QL
         String query = String.format(
             "[out:json];"
-            + "area[name=\"%s\"][boundary=administrative]->.searchArea;"
-            + "way(area.searchArea)[highway];"
-            + "out body;>;out skel qt;",
-            neighborhood
+            + "area[name=\"%s\"][boundary=administrative][admin_level~\"8|9\"];"
+            + "area[name=\"%s\"]->.cityArea;"
+            + "area(area.cityArea)[name=\"%s\"];"
+            + "out ids;",
+            cityName, cityName, placeName
         );
     
         String url = "https://overpass-api.de/api/interpreter?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
-        
+    
         Request request = new Request.Builder().url(url).build();
-        System.out.println(request);
-        Map<Long, List<Object>> streetsMap = new HashMap<>();
-        
+    
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 throw new IOException("Unexpected response code: " + response.code() + " - " + response.message());
             }
-            
+    
             String jsonResponse = response.body().string();
             JSONObject jsonObject = new JSONObject(jsonResponse);
-            
+    
+            JSONArray elements = jsonObject.getJSONArray("elements");
+            if (elements.isEmpty()) {
+                throw new Exception("Area ID not found for place: " + placeName);
+            }
+    
+            return elements.getJSONObject(0).getLong("id");
+        }
+    }
+    
+
+    public static Map<Long, List<Object>> getStreetsWithNodesInNeighborhood(long areaId) throws Exception {
+        // Construir a consulta Overpass QL com o ID da área
+        String query = String.format(
+            "[out:json];"
+            + "area(%d)->.searchArea;"
+            + "way(area.searchArea)[highway];"
+            + "out body;>;out skel qt;",
+            areaId
+        );
+    
+        String url = "https://overpass-api.de/api/interpreter?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+    
+        Request request = new Request.Builder().url(url).build();
+        Map<Long, List<Object>> streetsMap = new HashMap<>();
+    
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("Unexpected response code: " + response.code() + " - " + response.message());
+            }
+    
+            String jsonResponse = response.body().string();
+            JSONObject jsonObject = new JSONObject(jsonResponse);
+    
             JSONArray elements = jsonObject.getJSONArray("elements");
             for (int i = 0; i < elements.length(); i++) {
                 JSONObject element = elements.getJSONObject(i);
-                
+    
                 // Filtrar apenas "ways" com "tags"
                 if ("way".equals(element.getString("type")) && element.has("tags")) {
                     Long wayId = element.getLong("id");
                     String streetName = element.getJSONObject("tags").optString("name", "Unknown Street");
-                    
+    
                     // Coletar os nós da rua
                     JSONArray nodesArray = element.getJSONArray("nodes");
                     List<Long> nodes = new ArrayList<>();
                     for (int j = 0; j < nodesArray.length(); j++) {
                         nodes.add(nodesArray.getLong(j));
                     }
-                    
+    
                     // Salvar informações no mapa
                     List<Object> streetInfo = new ArrayList<>();
                     streetInfo.add(streetName);
@@ -173,9 +205,9 @@ public class APIClient {
                 }
             }
         }
-        
+    
         return streetsMap;
-    }    
+    }
 
     public static Set<String> getIntersections(Map<Long, List<Object>> streetDataMap) {
         Set<String> intersections = new HashSet<>();
@@ -484,7 +516,7 @@ public class APIClient {
 
     public static void main(String[] args) {
         try {
-            double[] start = { -47.1316262, -23.0461230 }; // Rio de Janeiro
+            /* double[] start = { -47.1316262, -23.0461230 }; // Rio de Janeiro
             double[] end = { -47.1295653, -23.0465945 }; // São Paulo
             String profile = "driving-car"; // Perfil de rota
             String outputPath = "rota.html"; // Caminho do arquivo HTML
@@ -503,7 +535,22 @@ public class APIClient {
             String geoJSONOutputPath = "route.geojson";
 
             // Salvar o percurso como GeoJSON
-            saveRouteAsGeoJSON(coordinates, profile, geoJSONOutputPath);
+            saveRouteAsGeoJSON(coordinates, profile, geoJSONOutputPath); */
+
+            String neighborhood = "Núcleo Residencial Jardim Líria";
+            String city = "Campinas";
+            long areaId = getAreaIdByName(neighborhood, city);
+
+            // Buscar as ruas e nós dentro da área
+            Map<Long, List<Object>> streets = getStreetsWithNodesInNeighborhood(areaId);
+
+            // Exibir os resultados
+            for (Map.Entry<Long, List<Object>> entry : streets.entrySet()) {
+                System.out.println("Way ID: " + entry.getKey());
+                System.out.println("Street Name: " + entry.getValue().get(0));
+                System.out.println("Nodes: " + entry.getValue().get(1));
+                System.out.println("-------------------");
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
