@@ -60,7 +60,8 @@ public class ApiClient {
         // Forçar o uso de Locale.US para garantir o formato correto do decimal
         String url = String.format(
             Locale.US,
-            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
+            /*"http://router.project-osrm.org/route/v1/driving/"*/
+            "http://localhost:5000/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
     
         OkHttpClient client = new OkHttpClient.Builder()
