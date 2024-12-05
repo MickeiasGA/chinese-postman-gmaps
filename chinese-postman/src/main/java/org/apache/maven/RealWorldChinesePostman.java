@@ -229,13 +229,15 @@ public class RealWorldChinesePostman {
 
     public static void main(String[] args) throws Exception {
         RealWorldChinesePostman problema = new RealWorldChinesePostman();
-        Scanner scanner = new Scanner(System.in);
+        Scanner scanner = new Scanner(System.in, "ISO-8859-1");
 
         try {
-            System.out.print("Digite o bairro: ");
-            String bairro = scanner.nextLine();
-            System.out.print("Digite a cidade: ");
-            String cidade = scanner.nextLine();
+            //System.out.print("Digite o bairro: ");
+
+            String bairro = "Núcleo Residencial Jardim Fernanda";//scanner.nextLine();
+            System.out.print(bairro);
+            //System.out.print("Digite a cidade: ");
+            String cidade = "Campinas";//scanner.nextLine();
 
             problema.descobrirCruzamentosPorBairro(bairro, cidade);
 

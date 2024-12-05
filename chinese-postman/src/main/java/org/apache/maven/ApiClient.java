@@ -7,13 +7,17 @@ import com.google.gson.*;
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
 public class ApiClient {
     private static final String apiKey = "AIzaSyDAjupBek5LKKWH3kO_SpwrLSQkdzkREQI";
-    private static final OkHttpClient client = new OkHttpClient();
+    private static final OkHttpClient client = new OkHttpClient.Builder()
+    .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
+    .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
+    .build();
     private static final String ORS_KEY = "5b3ce3597851110001cf62482742d40a8da74524acffc107da4c6d97";
 
     public String getAPIKey() {
@@ -59,7 +63,10 @@ public class ApiClient {
             "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
     
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient.Builder()
+        .connectTimeout(300, TimeUnit.SECONDS) // Tempo de conexão
+        .readTimeout(300, TimeUnit.SECONDS)    // Tempo para ler a resposta
+        .build();
         Request request = new Request.Builder()
                 .url(url)
                 .build();
@@ -92,7 +99,10 @@ public class ApiClient {
 
         url.replaceAll(",(?=[0-9]+,)", "").replaceAll(",", ".");
     
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
+        .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
+        .build();
         Request request = new Request.Builder()
                 .url(url)
                 //.addHeader("User-Agent", "YourAppName")
@@ -126,7 +136,7 @@ public class ApiClient {
         }
     }
 
-    public static long getAreaIdByName(String placeName, String cityName) throws Exception {
+    public static Long getAreaIdByName(String placeName, String cityName) throws Exception {
         // Construir a consulta Overpass QL
         String query = String.format(
             "[out:json];"
@@ -136,8 +146,11 @@ public class ApiClient {
             + "out ids;",
             cityName, cityName, placeName
         );
+        
+        System.out.println(query);
     
         String url = "https://overpass-api.de/api/interpreter?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+        System.out.println(url);
     
         Request request = new Request.Builder().url(url).build();
     
@@ -246,31 +259,50 @@ public class ApiClient {
     }
 
     public static double[] getNodeCoordinates(Long nodeId) {
-        String url = String.format("https://overpass-api.de/api/interpreter?data=[out:json];node(%d);out;", nodeId);
-
-        Request request = new Request.Builder().url(url).build();
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                throw new IOException("Erro ao buscar coordenadas do nó: " + response);
+        List<String> servers = Arrays.asList(
+            "https://overpass-api.de/api/interpreter",
+            "https://z.overpass-api.de/api/interpreter",
+            "https://lz4.overpass-api.de/api/interpreter"
+        );
+    
+        String queryTemplate = "%s?data=[out:json][timeout:180];node(%d);out;";
+        int maxRetries = servers.size(); // Número máximo de tentativas
+        int attempt = 0;
+    
+        while (attempt < maxRetries) {
+            String server = servers.get(attempt); // Alterna entre os servidores
+            String url = String.format(queryTemplate, server, nodeId);
+            System.out.printf("Tentando servidor: %s (Tentativa %d)%n", server, attempt + 1);
+    
+            Request request = new Request.Builder().url(url).build();
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new IOException("Erro ao buscar coordenadas do nó: " + response);
+                }
+    
+                String jsonResponse = response.body().string();
+                var jsonObject = new JSONObject(jsonResponse);
+    
+                JSONArray elements = jsonObject.getJSONArray("elements");
+                if (elements.length() > 0) {
+                    JSONObject node = elements.getJSONObject(0);
+                    double lat = node.getDouble("lat");
+                    double lon = node.getDouble("lon");
+                    return new double[]{lat, lon};
+                } else {
+                    System.err.println("Nenhum nó encontrado para o ID: " + nodeId);
+                    return null; // Nenhum nó encontrado, retorna nulo
+                }
+            } catch (IOException | JSONException e) {
+                System.err.printf("Erro no servidor %s: %s%n", server, e.getMessage());
+                attempt++; // Passa para o próximo servidor
             }
-
-            String jsonResponse = response.body().string();
-            var jsonObject = new JSONObject(jsonResponse);
-
-            JSONArray elements = jsonObject.getJSONArray("elements");
-            if (elements.length() > 0) {
-                JSONObject node = elements.getJSONObject(0);
-                double lat = node.getDouble("lat");
-                double lon = node.getDouble("lon");
-                return new double[] { lat, lon };
-            } else {
-                System.err.println("Nenhum nó encontrado para o ID: " + nodeId);
-            }
-        } catch (IOException | JSONException e) {
-            e.printStackTrace();
         }
-        return null; // Retorna nulo em caso de erro
-    }
+    
+        System.err.println("Todos os servidores falharam após múltiplas tentativas.");
+        return null; // Retorna nulo após todas as tentativas falharem
+    }    
+    
 
     public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap,
             Long nodeId1,
@@ -292,7 +324,10 @@ public class ApiClient {
 
     public static List<double[]> getRoute(double[] start, double[] end, String apiKey, String profile) {
         String url = "https://api.openrouteservice.org/v2/directions/" + profile;
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
+        .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
+        .build();
 
         try {
             // Construir o JSON do corpo da requisição
@@ -342,7 +377,10 @@ public class ApiClient {
             String apiKey, String profile,
             String outputPath) throws IOException {
         String url = "https://api.openrouteservice.org/v2/directions/" + profile;
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
+        .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
+        .build();
 
         try {
             // Create the request body with coordinates
@@ -470,7 +508,10 @@ public class ApiClient {
     public static void saveRouteAsGeoJSON(List<double[]> coordinates, String profile, String outputPath)
             throws IOException {
         String url = "https://api.openrouteservice.org/v2/directions/" + profile + "/geojson";
-        OkHttpClient client = new OkHttpClient();
+        OkHttpClient client = new OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
+        .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
+        .build();
 
         try {
             // Criar o corpo da requisição com as coordenadas
@@ -540,7 +581,7 @@ public class ApiClient {
 
             String neighborhood = "Núcleo Residencial Jardim Fernanda";
             String city = "Campinas";
-            long areaId = getAreaIdByName(neighborhood, city);
+            Long areaId = getAreaIdByName(neighborhood, city);
 
             // Buscar as ruas e nós dentro da área
             Map<Long, List<Object>> streets = getStreetsWithNodesInNeighborhood(areaId);
