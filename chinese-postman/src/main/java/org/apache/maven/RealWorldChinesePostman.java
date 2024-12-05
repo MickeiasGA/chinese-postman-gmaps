@@ -12,6 +12,7 @@ public class RealWorldChinesePostman {
     private static ApiClient apiClient;
     private List<double[]> cruzamentos; // Lista de cruzamentos como coordenadas GPS
     private static List<double[]> percurso; // Coordenadas do percurso calculado
+    private Map<Long, Integer> idParaIndice = new HashMap<>();
 
     public RealWorldChinesePostman() {
         this.arcos = null;
@@ -33,13 +34,29 @@ public class RealWorldChinesePostman {
             Set<String> intersections = ApiClient.getIntersections(streetDataMap);
 
             System.out.println("\nInterseções encontradas:" + intersections.size());
+
+            List<Long> nodeIds = new ArrayList<>();
             for (String intersection : intersections) {
-                //System.out.println(intersection);
                 Long nodeId = encontrarIdNo(intersection);
                 if (nodeId != null) {
-                    double[] coordenadas = ApiClient.getNodeCoordinates(nodeId);
+                    nodeIds.add(nodeId);
+                }
+            }
+
+            for (int i = 0; i < nodeIds.size(); i += 3) {
+                List<Long> batch = nodeIds.subList(i, Math.min(i + 3, nodeIds.size()));
+                Map<Long, double[]> coordenadasBatch = ApiClient.getCoordinatesBatch(batch);
+                System.out.println("Nós retornados pela API: " + coordenadasBatch.keySet());
+
+
+                for (Long nodeId : batch) {
+                    double[] coordenadas = coordenadasBatch.get(nodeId);
                     if (coordenadas != null) {
                         cruzamentos.add(coordenadas);
+                        idParaIndice.put(nodeId, cruzamentos.size() - 1);
+                        System.out.println("Inserindo nó no mapa: " + nodeId + " com índice " + (cruzamentos.size() - 1));
+                    } else {
+                        System.err.println("Coordenadas ausentes para o nó: " + nodeId);
                     }
                 }
             }
@@ -86,39 +103,69 @@ public class RealWorldChinesePostman {
         try {
             // Utiliza um Map para armazenar distâncias previamente calculadas
             Map<String, Float> distanciasCalculadas = new HashMap<>();
+            Map<String, List<Long>> nosPorRua = new HashMap<>();
     
-            for (int i = 0; i < cruzamentos.size(); i++) {
-                for (int j = i + 1; j < cruzamentos.size(); j++) { // Apenas combinações únicas
-                    double[] pontoOrigem = cruzamentos.get(i);
-                    double[] pontoDestino = cruzamentos.get(j);
+            // Agrupa os nós por ruas utilizando o streetDataMap
+            Map<Long, List<Object>> streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(ApiClient.getAreaIdByName("Bairro", "Cidade"));
+            for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
+                String nomeRua = (String) entry.getValue().get(0);
+                List<Long> nos = (List<Long>) entry.getValue().get(1);
     
-                    // Cria uma chave única para o par de cruzamentos
-                    String chavePar = i + "-" + j;
+                nosPorRua.computeIfAbsent(nomeRua, k -> new ArrayList<>()).addAll(nos);
+            }
     
-                    // Verifica se a distância já foi calculada
-                    if (!distanciasCalculadas.containsKey(chavePar)) {
-                        float distancia = ApiClient.getDistance(
-                            pontoOrigem[0], pontoOrigem[1],
-                            pontoDestino[0], pontoDestino[1]
-                        );
+            System.out.println("Nós agrupados por rua: " + nosPorRua);
     
-                        distanciasCalculadas.put(chavePar, distancia);
+            // Itera sobre cada rua e calcula as distâncias entre os nós dessa rua
+            for (Map.Entry<String, List<Long>> rua : nosPorRua.entrySet()) {
+                List<Long> nos = rua.getValue();
+                for (int i = 0; i < nos.size(); i++) {
+                    for (int j = i + 1; j < nos.size(); j++) { // Apenas combinações únicas
+                        Long nodeIdOrigem = nos.get(i);
+                        Long nodeIdDestino = nos.get(j);
+
+                        double[] pontoOrigem = ApiClient.getNodeCoordinates(nodeIdOrigem);
+                        double[] pontoDestino = ApiClient.getNodeCoordinates(nodeIdDestino);
+    
+                        if (pontoOrigem == null || pontoDestino == null) {
+                            continue;
+                        }
+    
+                        String chavePar = nodeIdOrigem + "-" + nodeIdDestino;
+    
+                        if (!distanciasCalculadas.containsKey(chavePar)) {
+                            float distancia = ApiClient.getDistance(
+                                pontoOrigem[0], pontoOrigem[1],
+                                pontoDestino[0], pontoDestino[1]
+                            );
+    
+                            distanciasCalculadas.put(chavePar, distancia);
+                        }
+    
+                        float distancia = distanciasCalculadas.get(chavePar);
+
+                        int indiceOrigem = encontrarIndiceNo(nodeIdOrigem);
+                        int indiceDestino = encontrarIndiceNo(nodeIdDestino);
+    
+                        arcos[indiceOrigem][indiceDestino]++;
+                        arcos[indiceDestino][indiceOrigem]++;
+                        custos[indiceOrigem][indiceDestino] = distancia;
+                        custos[indiceDestino][indiceOrigem] = distancia;
                     }
-    
-                    // Recupera a distância calculada
-                    float distancia = distanciasCalculadas.get(chavePar);
-    
-                    // Atualiza as matrizes
-                    arcos[i][j]++;
-                    arcos[j][i]++; // Grafo não direcionado (caso aplicável)
-                    custos[i][j] = distancia;
-                    custos[j][i] = distancia; // Simetria
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
-    }    
+    }
+    
+    private int encontrarIndiceNo(Long nodeId) {
+        if (idParaIndice.containsKey(nodeId)) {
+            return idParaIndice.get(nodeId);
+        }
+        throw new IllegalArgumentException("Nó não encontrado: " + nodeId);
+    }
+    
 
     public List<double[]> resolverProblema() {
         int[] delta = new int[N];
@@ -252,8 +299,8 @@ public class RealWorldChinesePostman {
 
             problema.resolverProblema();
 
-            System.out.print("Digite o arquivo para guardar o percurso: ");
-            String arquivo = scanner.nextLine();
+            System.out.print("Seu percurso será salvo em percurso.geojson: ");
+            String arquivo = "percurso.geojson";
 
             try {
                 ApiClient.saveRouteAsGeoJSON(percurso, "driving-car",arquivo);

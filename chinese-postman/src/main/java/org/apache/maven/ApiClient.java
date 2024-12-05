@@ -60,10 +60,10 @@ public class ApiClient {
         // Forçar o uso de Locale.US para garantir o formato correto do decimal
         String url = String.format(
             Locale.US,
-            /*"http://router.project-osrm.org/route/v1/driving/"*/
-            "http://localhost:5000/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
+            /*"http://localhost:5000/route/v1/driving/"*/
+            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
-    
+
         OkHttpClient client = new OkHttpClient.Builder()
         .connectTimeout(300, TimeUnit.SECONDS) // Tempo de conexão
         .readTimeout(300, TimeUnit.SECONDS)    // Tempo para ler a resposta
@@ -273,7 +273,7 @@ public class ApiClient {
         while (attempt < maxRetries) {
             String server = servers.get(attempt); // Alterna entre os servidores
             String url = String.format(queryTemplate, server, nodeId);
-            System.out.printf("Tentando servidor: %s (Tentativa %d)%n", server, attempt + 1);
+            System.out.printf("Tentando servidor: %s (Tentativa %d)%n", url, attempt + 1);
     
             Request request = new Request.Builder().url(url).build();
             try (Response response = client.newCall(request).execute()) {
@@ -302,8 +302,57 @@ public class ApiClient {
     
         System.err.println("Todos os servidores falharam após múltiplas tentativas.");
         return null; // Retorna nulo após todas as tentativas falharem
-    }    
+    }
+
+    public static Map<Long, double[]> getCoordinatesBatch(List<Long> nodeIds) throws IOException {
+        List<String> servers = Arrays.asList(
+            "https://overpass-api.de/api/interpreter",
+            "https://z.overpass-api.de/api/interpreter",
+            "https://lz4.overpass-api.de/api/interpreter"
+        );
     
+        String nodeList = nodeIds.stream()
+            .map(String::valueOf)
+            .collect(Collectors.joining(","));
+        String query = String.format("[out:json][timeout:180];node(id:%s);out;", nodeList);
+    
+        Map<Long, double[]> coordinatesMap = new HashMap<>();
+    
+        for (String server : servers) {
+            String url = server + "?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
+            System.out.printf("Tentando servidor: %s%n", url);
+    
+            Request request = new Request.Builder().url(url).build();
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    System.err.printf("Erro ao buscar coordenadas: %s (%d)%n", response.message(), response.code());
+                    continue;
+                }
+    
+                String jsonResponse = response.body().string();
+                JSONObject jsonObject = new JSONObject(jsonResponse);
+                JSONArray elements = jsonObject.getJSONArray("elements");
+    
+                for (int i = 0; i < elements.length(); i++) {
+                    JSONObject node = elements.getJSONObject(i);
+                    try {
+                        long id = node.getLong("id");
+                        double lat = node.getDouble("lat");
+                        double lon = node.getDouble("lon");
+                        coordinatesMap.put(id, new double[]{lat, lon});
+                    } catch (JSONException e) {
+                        System.err.printf("Erro ao processar nó JSON: %s%n", e.getMessage());
+                    }
+                }
+                return coordinatesMap; // Retorna o mapa assim que for bem-sucedido
+            } catch (IOException e) {
+                System.err.printf("Erro no servidor %s: %s%n", server, e.getMessage());
+            }
+        }
+    
+        System.err.println("Falha em todos os servidores para este lote.");
+        return coordinatesMap; // Retorna vazio se todos os servidores falharem
+    }    
 
     public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap,
             Long nodeId1,
@@ -506,56 +555,56 @@ public class ApiClient {
         return jsArray.toString();
     }
 
-    public static void saveRouteAsGeoJSON(List<double[]> coordinates, String profile, String outputPath)
-            throws IOException {
+    public static void saveRouteAsGeoJSON(List<double[]> coordinates, String profile, String outputPath) throws IOException {
+        if (coordinates.size() < 2) {
+            throw new IllegalArgumentException("Percurso inválido: menos de dois pontos disponíveis.");
+        }
+    
         String url = "https://api.openrouteservice.org/v2/directions/" + profile + "/geojson";
         OkHttpClient client = new OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
-        .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
-        .build();
-
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
+    
         try {
-            // Criar o corpo da requisição com as coordenadas
             JSONArray jsonCoordinates = new JSONArray();
             for (double[] coord : coordinates) {
                 jsonCoordinates.put(new JSONArray(coord));
             }
-
+    
             JSONObject requestBody = new JSONObject();
             requestBody.put("coordinates", jsonCoordinates);
-
+    
+            System.out.println("Corpo da requisição GeoJSON: " + requestBody.toString());
+    
             RequestBody body = RequestBody.create(
-                    requestBody.toString(),
-                    MediaType.get("application/json; charset=utf-8"));
-
+                requestBody.toString(),
+                MediaType.get("application/json; charset=utf-8")
+            );
+    
             Request request = new Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .addHeader("Authorization", ORS_KEY)
-                    .addHeader("Content-Type", "application/json; charset=utf-8")
-                    .addHeader("Accept",
-                            "application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8")
-                    .build();
-
-            // Executar a requisição e processar a resposta
+                .url(url)
+                .post(body)
+                .addHeader("Authorization", ORS_KEY)
+                .build();
+    
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
-                    throw new IOException("Error fetching route: " + response);
+                    throw new IOException("Erro ao buscar rota: " + response);
                 }
-
+    
                 String jsonResponse = response.body().string();
-
-                // Salvar a resposta GeoJSON no arquivo especificado
                 try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
                     writer.write(jsonResponse);
                 }
-
+    
                 System.out.println("GeoJSON file created at: " + outputPath);
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+    
 
     public static void main(String[] args) {
         try {
