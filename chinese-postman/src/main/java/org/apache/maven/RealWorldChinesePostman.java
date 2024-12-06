@@ -13,6 +13,8 @@ public class RealWorldChinesePostman {
     private List<double[]> cruzamentos; // Lista de cruzamentos como coordenadas GPS
     private static List<double[]> percurso; // Coordenadas do percurso calculado
     private Map<Long, Integer> idParaIndice = new HashMap<>();
+    private Map<Long, List<Object>> streetDataMap;
+
 
     public RealWorldChinesePostman() {
         this.arcos = null;
@@ -23,18 +25,18 @@ public class RealWorldChinesePostman {
         RealWorldChinesePostman.apiClient = new ApiClient();
     }
 
-    public void adicionarCruzamento(double[] coordenadas) {
-        cruzamentos.add(coordenadas);
-    }
+    //public void adicionarCruzamento(double[] coordenadas) {
+    //    cruzamentos.add(coordenadas);
+    //}
 
     public void descobrirCruzamentosPorBairro(String bairro, String cidade) {
         try {
             Long id = ApiClient.getAreaIdByName(bairro, cidade);
-            Map<Long, List<Object>> streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);
+            this.streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);  // Armazena os dados na variável de instância
             Set<String> intersections = ApiClient.getIntersections(streetDataMap);
-
+    
             System.out.println("\nInterseções encontradas:" + intersections.size());
-
+    
             List<Long> nodeIds = new ArrayList<>();
             for (String intersection : intersections) {
                 Long nodeId = encontrarIdNo(intersection);
@@ -42,25 +44,24 @@ public class RealWorldChinesePostman {
                     nodeIds.add(nodeId);
                 }
             }
-
+    
             for (int i = 0; i < nodeIds.size(); i += 3) {
                 List<Long> batch = nodeIds.subList(i, Math.min(i + 3, nodeIds.size()));
                 Map<Long, double[]> coordenadasBatch = ApiClient.getCoordinatesBatch(batch);
                 System.out.println("Nós retornados pela API: " + coordenadasBatch.keySet());
-
-
+    
                 for (Long nodeId : batch) {
                     double[] coordenadas = coordenadasBatch.get(nodeId);
                     if (coordenadas != null) {
                         cruzamentos.add(coordenadas);
                         idParaIndice.put(nodeId, cruzamentos.size() - 1);
-                        System.out.println("Inserindo nó no mapa: " + nodeId + " com índice " + (cruzamentos.size() - 1));
+                        //System.out.println("Inserindo nó no mapa: " + nodeId + " com índice " + (cruzamentos.size() - 1));
                     } else {
                         System.err.println("Coordenadas ausentes para o nó: " + nodeId);
                     }
                 }
             }
-
+    
             this.N = cruzamentos.size();
             this.arcos = new int[N][N];
             this.custos = new float[N][N];
@@ -69,7 +70,7 @@ public class RealWorldChinesePostman {
             System.err.println("Erro ao descobrir cruzamentos: " + e.getMessage());
             e.printStackTrace();
         }
-    }
+    }    
 
     private Long encontrarIdNo(String intersection) {
         try {
@@ -99,22 +100,25 @@ public class RealWorldChinesePostman {
         //nomesRuas[origem][destino] = nomeRua;
     }
 
-    public void adicionarRuas() {
+    public void adicionarRuas(String bairro, String cidade) {
         try {
+            // Certifique-se de que o streetDataMap já foi carregado
+            if (this.streetDataMap == null) {
+                System.err.println("Os dados das ruas não foram carregados. Execute 'descobrirCruzamentosPorBairro' primeiro.");
+                return;
+            }
+    
             // Utiliza um Map para armazenar distâncias previamente calculadas
             Map<String, Float> distanciasCalculadas = new HashMap<>();
             Map<String, List<Long>> nosPorRua = new HashMap<>();
     
-            // Agrupa os nós por ruas utilizando o streetDataMap
-            Map<Long, List<Object>> streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(ApiClient.getAreaIdByName("Bairro", "Cidade"));
+            // Agrupa os nós por ruas utilizando o streetDataMap já carregado
             for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
                 String nomeRua = (String) entry.getValue().get(0);
                 List<Long> nos = (List<Long>) entry.getValue().get(1);
     
                 nosPorRua.computeIfAbsent(nomeRua, k -> new ArrayList<>()).addAll(nos);
             }
-    
-            System.out.println("Nós agrupados por rua: " + nosPorRua);
     
             // Itera sobre cada rua e calcula as distâncias entre os nós dessa rua
             for (Map.Entry<String, List<Long>> rua : nosPorRua.entrySet()) {
@@ -123,7 +127,7 @@ public class RealWorldChinesePostman {
                     for (int j = i + 1; j < nos.size(); j++) { // Apenas combinações únicas
                         Long nodeIdOrigem = nos.get(i);
                         Long nodeIdDestino = nos.get(j);
-
+    
                         double[] pontoOrigem = ApiClient.getNodeCoordinates(nodeIdOrigem);
                         double[] pontoDestino = ApiClient.getNodeCoordinates(nodeIdDestino);
     
@@ -135,16 +139,19 @@ public class RealWorldChinesePostman {
     
                         if (!distanciasCalculadas.containsKey(chavePar)) {
                             float distancia = ApiClient.getDistance(
-                                pontoOrigem[0], pontoOrigem[1],
-                                pontoDestino[0], pontoDestino[1]
+                                    pontoOrigem[0], pontoOrigem[1],
+                                    pontoDestino[0], pontoDestino[1]
                             );
-    
                             distanciasCalculadas.put(chavePar, distancia);
                         }
     
                         float distancia = distanciasCalculadas.get(chavePar);
 
+                        System.out.println(idParaIndice.toString());
+                        
+                        System.out.println(nodeIdOrigem + " abuble1");
                         int indiceOrigem = encontrarIndiceNo(nodeIdOrigem);
+                        System.out.println(nodeIdDestino + " abuble2");
                         int indiceDestino = encontrarIndiceNo(nodeIdDestino);
     
                         arcos[indiceOrigem][indiceDestino]++;
@@ -157,15 +164,16 @@ public class RealWorldChinesePostman {
         } catch (Exception e) {
             e.printStackTrace();
         }
-    }
+    }    
     
     private int encontrarIndiceNo(Long nodeId) {
         if (idParaIndice.containsKey(nodeId)) {
+            System.out.println(idParaIndice.containsKey(nodeId));
+            System.out.println(idParaIndice.get(nodeId) + " abuble3");
             return idParaIndice.get(nodeId);
         }
         throw new IllegalArgumentException("Nó não encontrado: " + nodeId);
     }
-    
 
     public List<double[]> resolverProblema() {
         int[] delta = new int[N];
@@ -295,11 +303,12 @@ public class RealWorldChinesePostman {
             //     }
             // }
 
-            problema.adicionarRuas();
+            problema.adicionarRuas(bairro, cidade);
 
             problema.resolverProblema();
 
             System.out.print("Seu percurso será salvo em percurso.geojson: ");
+            System.out.print(percurso.size());
             String arquivo = "percurso.geojson";
 
             try {
