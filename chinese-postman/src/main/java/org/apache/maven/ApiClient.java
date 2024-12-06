@@ -273,7 +273,7 @@ public class ApiClient {
         while (attempt < maxRetries) {
             String server = servers.get(attempt); // Alterna entre os servidores
             String url = String.format(queryTemplate, server, nodeId);
-            System.out.printf("Tentando servidor: %s (Tentativa %d)%n", url, attempt + 1);
+            //System.out.printf("Tentando servidor: %s (Tentativa %d)%n", url, attempt + 1);
     
             Request request = new Request.Builder().url(url).build();
             try (Response response = client.newCall(request).execute()) {
@@ -320,7 +320,7 @@ public class ApiClient {
     
         for (String server : servers) {
             String url = server + "?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
-            System.out.printf("Tentando servidor: %s%n", url);
+            //System.out.printf("Tentando servidor: %s%n", url);
     
             Request request = new Request.Builder().url(url).build();
             try (Response response = client.newCall(request).execute()) {

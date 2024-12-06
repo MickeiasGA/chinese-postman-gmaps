@@ -25,10 +25,6 @@ public class RealWorldChinesePostman {
         RealWorldChinesePostman.apiClient = new ApiClient();
     }
 
-    //public void adicionarCruzamento(double[] coordenadas) {
-    //    cruzamentos.add(coordenadas);
-    //}
-
     public void descobrirCruzamentosPorBairro(String bairro, String cidade) {
         try {
             Long id = ApiClient.getAreaIdByName(bairro, cidade);
@@ -48,7 +44,6 @@ public class RealWorldChinesePostman {
             for (int i = 0; i < nodeIds.size(); i += 3) {
                 List<Long> batch = nodeIds.subList(i, Math.min(i + 3, nodeIds.size()));
                 Map<Long, double[]> coordenadasBatch = ApiClient.getCoordinatesBatch(batch);
-                System.out.println("Nós retornados pela API: " + coordenadasBatch.keySet());
     
                 for (Long nodeId : batch) {
                     double[] coordenadas = coordenadasBatch.get(nodeId);
@@ -61,6 +56,8 @@ public class RealWorldChinesePostman {
                     }
                 }
             }
+
+            System.out.println("Cruzamentos: " + cruzamentos.toArray());
     
             this.N = cruzamentos.size();
             this.arcos = new int[N][N];
@@ -107,19 +104,21 @@ public class RealWorldChinesePostman {
                 System.err.println("Os dados das ruas não foram carregados. Execute 'descobrirCruzamentosPorBairro' primeiro.");
                 return;
             }
+            System.out.println(this.streetDataMap.toString()+" streetDataMap\n");
     
             // Utiliza um Map para armazenar distâncias previamente calculadas
             Map<String, Float> distanciasCalculadas = new HashMap<>();
             Map<String, List<Long>> nosPorRua = new HashMap<>();
     
             // Agrupa os nós por ruas utilizando o streetDataMap já carregado
-            for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
+            for (Map.Entry<Long, List<Object>> entry : this.streetDataMap.entrySet()) {
                 String nomeRua = (String) entry.getValue().get(0);
                 List<Long> nos = (List<Long>) entry.getValue().get(1);
-    
+
                 nosPorRua.computeIfAbsent(nomeRua, k -> new ArrayList<>()).addAll(nos);
             }
     
+            System.out.println(nosPorRua.toString()+" nosPorRua\n");
             // Itera sobre cada rua e calcula as distâncias entre os nós dessa rua
             for (Map.Entry<String, List<Long>> rua : nosPorRua.entrySet()) {
                 List<Long> nos = rua.getValue();
@@ -149,9 +148,9 @@ public class RealWorldChinesePostman {
 
                         System.out.println(idParaIndice.toString());
                         
-                        System.out.println(nodeIdOrigem + " abuble1");
+                        System.out.println(nodeIdOrigem + " nodeIdOrigem");
                         int indiceOrigem = encontrarIndiceNo(nodeIdOrigem);
-                        System.out.println(nodeIdDestino + " abuble2");
+                        System.out.println(nodeIdDestino + " nodeIdDestino");
                         int indiceDestino = encontrarIndiceNo(nodeIdDestino);
     
                         arcos[indiceOrigem][indiceDestino]++;
@@ -284,24 +283,13 @@ public class RealWorldChinesePostman {
 
     public static void main(String[] args) throws Exception {
         RealWorldChinesePostman problema = new RealWorldChinesePostman();
-        Scanner scanner = new Scanner(System.in, "ISO-8859-1");
 
-        try {
-            //System.out.print("Digite o bairro: ");
-
-            String bairro = "Núcleo Residencial Jardim Fernanda";//scanner.nextLine();
-            System.out.print(bairro);
-            //System.out.print("Digite a cidade: ");
-            String cidade = "Campinas";//scanner.nextLine();
+            String bairro = "Núcleo Residencial Jardim Fernanda";
+            System.out.print(bairro + "\n");
+            String cidade = "Campinas";
+            System.out.print(cidade + "\n");
 
             problema.descobrirCruzamentosPorBairro(bairro, cidade);
-
-            // for (int i = 0; i < problema.N; i++) {
-            //     for (int j = i + 1; j < problema.N; j++) {
-            //         problema.adicionarRua(i, j);
-            //         System.out.println(cidade);
-            //     }
-            // }
 
             problema.adicionarRuas(bairro, cidade);
 
@@ -318,8 +306,4 @@ public class RealWorldChinesePostman {
             }
 
             //problema.desenharPercurso();
-        } finally {
-            scanner.close();
-        }
-    }
 }
