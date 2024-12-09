@@ -60,8 +60,8 @@ public class ApiClient {
         // Forçar o uso de Locale.US para garantir o formato correto do decimal
         String url = String.format(
             Locale.US,
-            /*"http://localhost:5000/route/v1/driving/"*/
-            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
+            /*"http://router.project-osrm.org/route/v1/driving/"*/
+            "http://localhost:5000/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
 
         OkHttpClient client = new OkHttpClient.Builder()
@@ -227,37 +227,66 @@ public class ApiClient {
     public static Set<String> getIntersections(Map<Long, List<Object>> streetDataMap) {
         Set<String> intersections = new HashSet<>();
         Map<Long, Set<Long>> nodeToWaysMap = new HashMap<>();
-        Map<Long, String> wayIdToStreetNameMap = new HashMap<>();
-
-        // Mapeia os nós para os IDs das ruas e armazena os nomes das ruas
-        for (var entry : streetDataMap.entrySet()) {
+        Map<String, Set<Long>> streetNameToWayIdsMap = new HashMap<>();
+    
+        // Agrupa os IDs das ruas por nome
+        for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
+            Long wayId = entry.getKey();
+            String streetName = (String) entry.getValue().get(0);
+    
+            streetNameToWayIdsMap.computeIfAbsent(streetName, k -> new HashSet<>()).add(wayId);
+        }
+    
+        // Atualiza o nodeToWaysMap considerando apenas IDs que contêm o nó
+        for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
             Long wayId = entry.getKey();
             String streetName = (String) entry.getValue().get(0);
             List<Long> nodes = (List<Long>) entry.getValue().get(1);
-
-            wayIdToStreetNameMap.put(wayId, streetName);
-
+    
             for (Long node : nodes) {
-                nodeToWaysMap.computeIfAbsent(node, k -> new HashSet<>()).add(wayId);
+                // Obtem IDs relacionados ao mesmo nome de rua
+                Set<Long> relatedWayIds = streetNameToWayIdsMap.get(streetName);
+    
+                // Filtra apenas os IDs que contêm o nó
+                Set<Long> validWayIds = new HashSet<>();
+                for (Long relatedWayId : relatedWayIds) {
+                    List<Long> relatedWayNodes = (List<Long>) streetDataMap.get(relatedWayId).get(1);
+                    if (relatedWayNodes.contains(node)) {
+                        validWayIds.add(relatedWayId);
+                    }
+                }
+    
+                // Atualiza o mapeamento de nó para IDs válidos
+                nodeToWaysMap.computeIfAbsent(node, k -> new HashSet<>()).addAll(validWayIds);
             }
         }
-
+    
         // Encontra interseções com base nos nós compartilhados
-        for (var entry : nodeToWaysMap.entrySet()) {
+        for (Map.Entry<Long, Set<Long>> entry : nodeToWaysMap.entrySet()) {
             Long nodeId = entry.getKey();
             Set<Long> ways = entry.getValue();
-            if (ways.size() > 1) { // O nó está compartilhado por mais de uma via
+    
+            // Verifica se o nó está em mais de uma rua
+            if (ways.size() >= 1) {
                 List<String> intersectingStreets = new ArrayList<>();
                 for (Long wayId : ways) {
-                    intersectingStreets.add(wayIdToStreetNameMap.get(wayId));
+                    // Identifica o nome da rua pelo wayId
+                    streetDataMap.forEach((id, data) -> {
+                        if (id.equals(wayId)) {
+                            intersectingStreets.add((String) data.get(0));
+                        }
+                    });
                 }
-                intersections.add("Intersection at node ID: " + nodeId + " between streets: "
-                        + String.join(" & ", intersectingStreets));
+                intersections.add("Intersection at node ID: " + nodeId + " between streets: " 
+                                  + String.join(" & ", intersectingStreets));
             }
         }
-
+    
+        System.out.println("Mapa de ruas para IDs: " + streetNameToWayIdsMap);
+        System.out.println("Mapa de nós para ruas: " + nodeToWaysMap);
+    
         return intersections;
-    }
+    }    
 
     public static double[] getNodeCoordinates(Long nodeId) {
         List<String> servers = Arrays.asList(
