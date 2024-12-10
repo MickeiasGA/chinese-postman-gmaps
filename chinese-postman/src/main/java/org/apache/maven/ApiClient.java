@@ -216,6 +216,8 @@ public class ApiClient {
             JSONObject jsonObject = new JSONObject(jsonResponse);
     
             JSONArray elements = jsonObject.getJSONArray("elements");
+            Map<Long, Integer> nodeCountMap = new HashMap<>(); // Para contar as ocorrências de cada nó
+    
             for (int i = 0; i < elements.length(); i++) {
                 JSONObject element = elements.getJSONObject(i);
     
@@ -228,7 +230,11 @@ public class ApiClient {
                     JSONArray nodesArray = element.getJSONArray("nodes");
                     List<Long> nodes = new ArrayList<>();
                     for (int j = 0; j < nodesArray.length(); j++) {
-                        nodes.add(nodesArray.getLong(j));
+                        Long nodeId = nodesArray.getLong(j);
+                        nodes.add(nodeId);
+    
+                        // Atualizar a contagem de ocorrências do nó
+                        nodeCountMap.put(nodeId, nodeCountMap.getOrDefault(nodeId, 0) + 1);
                     }
     
                     // Salvar informações no mapa
@@ -238,8 +244,15 @@ public class ApiClient {
                     streetsMap.put(wayId, streetInfo);
                 }
             }
-        }
     
+            // Remover os nós que aparecem apenas uma vez
+            for (Map.Entry<Long, List<Object>> entry : streetsMap.entrySet()) {
+                List<Long> nodes = (List<Long>) entry.getValue().get(1);
+                nodes.removeIf(node -> nodeCountMap.get(node) == 1); // Filtrar nós únicos
+            }
+        }
+
+        System.out.println(streetsMap);    
         return streetsMap;
     }
 

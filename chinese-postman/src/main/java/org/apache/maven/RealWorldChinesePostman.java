@@ -96,26 +96,26 @@ public class RealWorldChinesePostman {
             }
 
             Map<String, Float> distanciasCalculadas = new HashMap<>();
-            Map<String, List<Long>> nosPorRua = new HashMap<>();
+            Map<Long, List<Long>> nosPorRua = new HashMap<>();
 
             for (Map.Entry<Long, List<Object>> entry : this.streetDataMap.entrySet()) {
-                String nomeRua = (String) entry.getValue().get(0);
+                Long idRua = entry.getKey();
                 List<Long> nos = (List<Long>) entry.getValue().get(1);
 
-                nosPorRua.computeIfAbsent(nomeRua, k -> new ArrayList<>()).addAll(nos);
+                nosPorRua.computeIfAbsent(idRua, k -> new ArrayList<>()).addAll(nos);
             }
 
             //System.out.println("idParaIndice carregado: " + this.idParaIndice);
             //System.out.println("Nos agrupados por rua: " + nosPorRua);
             //System.in.read();
 
-            for (Map.Entry<String, List<Long>> rua : nosPorRua.entrySet()) {
-                String nomeRua = rua.getKey();
+            for (Map.Entry<Long, List<Long>> rua : nosPorRua.entrySet()) {
+                Long idRua = rua.getKey();
                 List<Long> nos = rua.getValue();
-                //System.out.println("Processando rua: " + nomeRua + " com nós: " + nos);
-                /* for (Long no : nos) {
+                System.out.println("Processando rua: " + idRua + " com nós: " + nos);
+                 for (Long no : nos) {
                     System.out.println(no + " presente: " + idParaIndice.containsKey(no));
-                } */
+                } 
 
                 for (int i = 0; i < nos.size(); i++) {
                     for (int j = i + 1; j < nos.size(); j++) {
@@ -152,7 +152,6 @@ public class RealWorldChinesePostman {
                         arcos[indiceDestino][indiceOrigem]++;
                         custos[indiceOrigem][indiceDestino] = distancia;
                         custos[indiceDestino][indiceOrigem] = distancia;
-                        System.out.print(".");
                     }
                 }
             }
@@ -295,14 +294,14 @@ public class RealWorldChinesePostman {
 
         System.out.print("Seu percurso será salvo em percurso.geojson: ");
         System.out.print(percurso.size());
-        //String arquivo = "percurso.geojson";
+        String arquivo = "percurso.geojson";
 
-        //try {
-        //    ApiClient.saveRouteAsGeoJSON(percurso, "driving-car", arquivo);
-        //} catch (IOException e) {
-        //    e.printStackTrace();
-        //}
+        try {
+            ApiClient.saveRouteAsGeoJSON(percurso, "driving-car", arquivo);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-        // problema.desenharPercurso();
+        problema.desenharPercurso();
     }
 }

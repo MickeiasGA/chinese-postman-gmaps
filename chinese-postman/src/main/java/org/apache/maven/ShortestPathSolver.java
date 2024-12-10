@@ -4,20 +4,14 @@ import java.io.*;
 import java.util.*;
 
 public class ShortestPathSolver {
-    public static List<double[]> findShortestPath(double lat, double lon, double radius) throws Exception {
+    public static List<List<double[]>> findShortestPath(String bairro, String cidade) throws Exception {
         // Step 1: Get the streets and their nodes within the radius
-        //Map<Long, List<Object>> streets = ApiClient.getStreetsWithinRadius(lat, lon, radius);
-        String bairro = "Núcleo Residencial Jardim Fernanda";
-        System.out.print(bairro + "\n");
-        String cidade = "Campinas";
-        System.out.print(cidade + "\n");
-
         Long id = ApiClient.getAreaIdByName(bairro, cidade);
         Map<Long, List<Object>> streets = ApiClient.getStreetsWithNodesInNeighborhood(id);
         System.out.println("Retrieved " + streets.size() + " streets.");
 
-        // Step 2: Build a graph
-        Map<Long, Set<Long>> graph = buildGraph(streets);
+        // Step 2: Build a weighted graph
+        Map<Long, Map<Long, Float>> graph = buildGraph(streets);
 
         // Step 3: Find odd-degree nodes
         List<Long> oddNodes = findOddDegreeNodes(graph);
@@ -29,24 +23,43 @@ public class ShortestPathSolver {
         List<Long> eulerianPath = findEulerianPath(graph);
 
         // Step 6: Convert node IDs to coordinates for visualization
-        return convertNodeIdsToCoordinates(eulerianPath);
+        List<double[]> coordinates = convertNodeIdsToCoordinates(eulerianPath);
+
+        // Step 7: Split the path into segments of max 70 nodes
+        return splitPathIntoSubgraphs(coordinates, 70);
     }
 
-    private static Map<Long, Set<Long>> buildGraph(Map<Long, List<Object>> streets) {
-        Map<Long, Set<Long>> graph = new HashMap<>();
+    private static Map<Long, Map<Long, Float>> buildGraph(Map<Long, List<Object>> streets) throws IOException {
+        Map<Long, Map<Long, Float>> graph = new HashMap<>();
+
         for (Map.Entry<Long, List<Object>> entry : streets.entrySet()) {
             List<Long> nodes = (List<Long>) entry.getValue().get(1);
+            boolean isOneway = (boolean) entry.getValue().get(3);
+
             for (int i = 0; i < nodes.size() - 1; i++) {
-                graph.computeIfAbsent(nodes.get(i), k -> new HashSet<>()).add(nodes.get(i + 1));
-                graph.computeIfAbsent(nodes.get(i + 1), k -> new HashSet<>()).add(nodes.get(i));
+                Long node1 = nodes.get(i);
+                Long node2 = nodes.get(i + 1);
+
+                // Get the coordinates of the nodes
+                double[] coord1 = ApiClient.getNodeCoordinates(node1);
+                double[] coord2 = ApiClient.getNodeCoordinates(node2);
+
+                // Calculate the distance between nodes
+                float distance = ApiClient.getDistance(coord1[0], coord1[1], coord2[0], coord2[1]);
+
+                // Add connections and weights to the graph
+                graph.computeIfAbsent(node1, k -> new HashMap<>()).put(node2, distance);
+                if (!isOneway) {
+                    graph.computeIfAbsent(node2, k -> new HashMap<>()).put(node1, distance);
+                }
             }
         }
         return graph;
     }
 
-    private static List<Long> findOddDegreeNodes(Map<Long, Set<Long>> graph) {
+    private static List<Long> findOddDegreeNodes(Map<Long, Map<Long, Float>> graph) {
         List<Long> oddNodes = new ArrayList<>();
-        for (Map.Entry<Long, Set<Long>> entry : graph.entrySet()) {
+        for (Map.Entry<Long, Map<Long, Float>> entry : graph.entrySet()) {
             if (entry.getValue().size() % 2 != 0) {
                 oddNodes.add(entry.getKey());
             }
@@ -54,18 +67,32 @@ public class ShortestPathSolver {
         return oddNodes;
     }
 
-    private static void addEdgesForEulerianPath(Map<Long, Set<Long>> graph, List<Long> oddNodes) throws IOException {
-        // Pair odd nodes with the shortest connections
+    private static void addEdgesForEulerianPath(Map<Long, Map<Long, Float>> graph, List<Long> oddNodes) throws IOException {
+        Map<String, Float> distanceCache = new HashMap<>();
+
         for (int i = 0; i < oddNodes.size(); i += 2) {
             Long node1 = oddNodes.get(i);
             Long node2 = oddNodes.get(i + 1);
-            graph.computeIfAbsent(node1, k -> new HashSet<>()).add(node2);
-            graph.computeIfAbsent(node2, k -> new HashSet<>()).add(node1);
+
+            // Use cached distance if available
+            String key = node1 + "-" + node2;
+            Float distance;
+            if (distanceCache.containsKey(key)) {
+                distance = distanceCache.get(key);
+            } else {
+                double[] coord1 = ApiClient.getNodeCoordinates(node1);
+                double[] coord2 = ApiClient.getNodeCoordinates(node2);
+                distance = ApiClient.getDistance(coord1[0], coord1[1], coord2[0], coord2[1]);
+                distanceCache.put(key, distance);
+            }
+
+            // Add weighted edge to the graph
+            graph.computeIfAbsent(node1, k -> new HashMap<>()).put(node2, distance);
+            graph.computeIfAbsent(node2, k -> new HashMap<>()).put(node1, distance);
         }
     }
 
-    private static List<Long> findEulerianPath(Map<Long, Set<Long>> graph) {
-        // Implement Hierholzer's algorithm
+    private static List<Long> findEulerianPath(Map<Long, Map<Long, Float>> graph) {
         Stack<Long> stack = new Stack<>();
         List<Long> path = new ArrayList<>();
         Long start = graph.keySet().iterator().next();
@@ -74,7 +101,7 @@ public class ShortestPathSolver {
         while (!stack.isEmpty()) {
             Long node = stack.peek();
             if (!graph.get(node).isEmpty()) {
-                Long neighbor = graph.get(node).iterator().next();
+                Long neighbor = graph.get(node).keySet().iterator().next();
                 graph.get(node).remove(neighbor);
                 graph.get(neighbor).remove(node);
                 stack.push(neighbor);
@@ -97,16 +124,47 @@ public class ShortestPathSolver {
         return coordinates;
     }
 
+    private static List<List<double[]>> splitPathIntoSubgraphs(List<double[]> path, int maxNodes) {
+        List<List<double[]>> subgraphs = new ArrayList<>();
+        List<double[]> currentSegment = new ArrayList<>();
+        int nodeCount = 0;
+
+        currentSegment.add(path.get(0));
+        nodeCount++;
+
+        for (int i = 1; i < path.size(); i++) {
+            double[] currentCoord = path.get(i);
+            currentSegment.add(currentCoord);
+            nodeCount++;
+
+            if (nodeCount >= maxNodes) {
+                subgraphs.add(new ArrayList<>(currentSegment));
+                currentSegment.clear();
+                currentSegment.add(currentCoord);
+                nodeCount = 1;
+            }
+        }
+
+        if (!currentSegment.isEmpty()) {
+            subgraphs.add(currentSegment);
+        }
+
+        return subgraphs;
+    }
+
     public static void main(String[] args) {
         try {
-            double lat = -23.0461230; // Example latitude
-            double lon = -47.1316262; // Example longitude
-            double radius = 100;      // Radius in meters
+            String bairro = "Núcleo Residencial Jardim Fernanda";
+            String cidade = "Campinas";
+            List<List<double[]>> pathSegments = findShortestPath(bairro, cidade);
 
-            List<double[]> shortestPath = findShortestPath(lat, lon, radius);
-            System.out.println("{coordinates:");
-            for (double[] coord : shortestPath) {
-                System.out.println("["+coord[1] + "," + coord[0]+"],");
+            for (int i = 0; i < pathSegments.size(); i++) {
+                System.out.println("Segmento " + (i + 1) + ":");
+                System.out.println("{coordinates:");
+                for (double[] coord : pathSegments.get(i)) {
+                    System.out.println("[" + coord[1] + "," + coord[0] + "],");
+                }
+                System.out.println("}");
             }
         } catch (Exception e) {
             e.printStackTrace();
