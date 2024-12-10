@@ -6,7 +6,14 @@ import java.util.*;
 public class ShortestPathSolver {
     public static List<double[]> findShortestPath(double lat, double lon, double radius) throws Exception {
         // Step 1: Get the streets and their nodes within the radius
-        Map<Long, List<Object>> streets = ApiClient.getStreetsWithinRadius(lat, lon, radius);
+        //Map<Long, List<Object>> streets = ApiClient.getStreetsWithinRadius(lat, lon, radius);
+        String bairro = "Núcleo Residencial Jardim Fernanda";
+        System.out.print(bairro + "\n");
+        String cidade = "Campinas";
+        System.out.print(cidade + "\n");
+
+        Long id = ApiClient.getAreaIdByName(bairro, cidade);
+        Map<Long, List<Object>> streets = ApiClient.getStreetsWithNodesInNeighborhood(id);
         System.out.println("Retrieved " + streets.size() + " streets.");
 
         // Step 2: Build a graph
