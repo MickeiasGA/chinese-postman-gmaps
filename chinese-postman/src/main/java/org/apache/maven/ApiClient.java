@@ -3,8 +3,6 @@ package org.apache.maven;
 import okhttp3.*;
 import org.json.*;
 
-import com.google.gson.*;
-
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -13,55 +11,76 @@ import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
 
 public class ApiClient {
-    private static final String apiKey = "AIzaSyDAjupBek5LKKWH3kO_SpwrLSQkdzkREQI";
     private static final OkHttpClient client = new OkHttpClient.Builder()
     .connectTimeout(30, TimeUnit.SECONDS) // Tempo de conexão
     .readTimeout(30, TimeUnit.SECONDS)    // Tempo para ler a resposta
     .build();
     private static final String ORS_KEY = "5b3ce3597851110001cf62482742d40a8da74524acffc107da4c6d97";
 
-    public String getAPIKey() {
-        return apiKey;
-    }
+    public static Map<Long, List<Object>> getStreetsWithinRadius(double lat, double lon, double radiusInMeters) throws Exception {
+        // Construir a consulta Overpass QL com o centro e raio
+        String query = String.format(
+            Locale.US,
+            "[out:json];"
+            + "way(around:%f,%f,%f)[highway];"
+            + "out body;>;out skel qt;",
+            radiusInMeters, lat, lon
+        );
+    
+        // Codificar a consulta para uso na URL
+        String url = "https://overpass-api.de/api/interpreter?data=" + URLEncoder.encode(query, StandardCharsets.UTF_8);
 
-    /* public static double[] getCoordinates(String address) throws IOException {
-        // Usando Nominatim para geocodificação (alternativa baseada no OSM)
-        String url = "https://nominatim.openstreetmap.org/search?q=" +
-                     URLEncoder.encode(address, StandardCharsets.UTF_8) +
-                     "&format=json&limit=1";
+        System.out.println(url);
     
-        OkHttpClient client = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(url)
-                .addHeader("User-Agent", "YourAppName") // Requerido por Nominatim
-                .build();
-    
+        // Criar o mapa para armazenar as ruas e seus nós
+        Map<Long, List<Object>> streetsMap = new HashMap<>();
+        
+        // Realizar a requisição
+        Request request = new Request.Builder().url(url).build();
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
-                throw new IOException("Failed to fetch coordinates: " + response);
+                throw new IOException("Erro inesperado: " + response.code() + " - " + response.message());
             }
     
+            // Processar a resposta JSON
             String jsonResponse = response.body().string();
-            JSONArray results = new JSONArray(jsonResponse);
+            JSONObject jsonObject = new JSONObject(jsonResponse);
+            JSONArray elements = jsonObject.getJSONArray("elements");
     
-            if (results.length() == 0) {
-                throw new IOException("No results found for the given address.");
+            // Iterar sobre as ruas retornadas
+            for (int i = 0; i < elements.length(); i++) {
+                JSONObject element = elements.getJSONObject(i);
+    
+                // Filtrar apenas "ways" com "tags"
+                if ("way".equals(element.getString("type")) && element.has("tags")) {
+                    Long wayId = element.getLong("id");
+                    String streetName = element.getJSONObject("tags").optString("name", "Unknown Street");
+    
+                    // Coletar os nós da rua
+                    JSONArray nodesArray = element.getJSONArray("nodes");
+                    List<Long> nodes = new ArrayList<>();
+                    for (int j = 0; j < nodesArray.length(); j++) {
+                        nodes.add(nodesArray.getLong(j));
+                    }
+    
+                    // Salvar as informações no mapa
+                    List<Object> streetInfo = new ArrayList<>();
+                    streetInfo.add(streetName);
+                    streetInfo.add(nodes);
+                    streetsMap.put(wayId, streetInfo);
+                }
             }
-    
-            JSONObject location = results.getJSONObject(0);
-            double lat = location.getDouble("lat");
-            double lon = location.getDouble("lon");
-    
-            return new double[]{lat, lon};
         }
-    } */
+    
+        return streetsMap;
+    }
 
     public static float getDistance(double lat1, double lon1, double lat2, double lon2) throws IOException {
         // Forçar o uso de Locale.US para garantir o formato correto do decimal
         String url = String.format(
             Locale.US,
-            /*"http://router.project-osrm.org/route/v1/driving/"*/
-            "http://localhost:5000/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
+            /*"http://localhost:5000/route/v1/driving/"*/
+            "http://router.project-osrm.org/route/v1/driving/" + lon1 + "," + lat1 + ";" + lon2 + "," + lat2 + "?overview=false"
         );
 
         OkHttpClient client = new OkHttpClient.Builder()
@@ -633,45 +652,101 @@ public class ApiClient {
             e.printStackTrace();
         }
     }
-    
 
+    public static void drawRouteWithNodes(Map<Long, List<Object>> streetsDataMap, String outputPath) throws IOException {
+        StringBuilder htmlContent = new StringBuilder();
+        
+        // Inicializar o conteúdo HTML
+        htmlContent.append("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Map with Street Routes and Nodes</title>
+                <meta charset="utf-8" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+            </head>
+            <body>
+                <div id="map" style="width: 100%; height: 100vh;"></div>
+                <script>
+                    var map = L.map('map').setView([0, 0], 15); // Coords iniciais, será ajustado depois
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap'
+                    }).addTo(map);
+        """);
+        
+        // Gerar marcações para cada rua e nó
+        for (Map.Entry<Long, List<Object>> entry : streetsDataMap.entrySet()) {
+            String streetName = (String) entry.getValue().get(0);
+            List<Long> nodeIds = (List<Long>) entry.getValue().get(1);
+            
+            // Desenhar a linha da rua
+            htmlContent.append("var polyline = L.polyline([");
+            for (int i = 0; i < nodeIds.size(); i++) {
+                Long nodeId = nodeIds.get(i);
+                double[] coords = getNodeCoordinates(nodeId); // Pega as coordenadas do nó
+                if (coords != null) {
+                    htmlContent.append("[").append(coords[0]).append(", ").append(coords[1]).append("]");
+                    if (i < nodeIds.size() - 1) {
+                        htmlContent.append(", ");
+                    }
+                }
+            }
+            htmlContent.append("], {color: 'blue'}).addTo(map);");
+    
+            // Marcar os nós com marcadores
+            for (Long nodeId : nodeIds) {
+                double[] coords = getNodeCoordinates(nodeId);
+                if (coords != null) {
+                    htmlContent.append("""
+                        L.marker([%LAT%, %LON%]).addTo(map).bindPopup('Node ID: %NODE_ID%');
+                    """.replace("%LAT%", String.valueOf(coords[0]))
+                       .replace("%LON%", String.valueOf(coords[1]))
+                       .replace("%NODE_ID%", nodeId.toString()));
+                }
+            }
+        }
+    
+        // Ajustar o zoom para a área da rota
+        htmlContent.append("""
+            map.fitBounds(polyline.getBounds());
+        """);
+    
+        // Fechar a tag HTML
+        htmlContent.append("""
+            </script>
+            </body>
+            </html>
+        """);
+    
+        // Salvar o HTML no caminho fornecido
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            writer.write(htmlContent.toString());
+        }
+    
+        System.out.println("Map generated: " + outputPath);
+    }
+    
     public static void main(String[] args) {
         try {
-            /* double[] start = { -47.1316262, -23.0461230 }; // Rio de Janeiro
-            double[] end = { -47.1295653, -23.0465945 }; // São Paulo
-            String profile = "driving-car"; // Perfil de rota
-            String outputPath = "rota.html"; // Caminho do arquivo HTML
-
-            drawSimpleRoute(start, end, ORS_KEY, profile, outputPath);
-
-            System.out.println();
-
-            List<double[]> coordinates = List.of(
-                    new double[] { -46.9249728, -23.6814345 }, // São Paulo
-                    new double[] { -43.7756563, -22.913158 }, // Rio de Janeiro
-                    new double[] { -48.1021749, -15.7211565 } // Brasília
-            );
-
-            //String mapOutputPath = "map.html";
-            String geoJSONOutputPath = "route.geojson";
-
-            // Salvar o percurso como GeoJSON
-            saveRouteAsGeoJSON(coordinates, profile, geoJSONOutputPath); */
 
             String neighborhood = "Núcleo Residencial Jardim Fernanda";
             String city = "Campinas";
             Long areaId = getAreaIdByName(neighborhood, city);
 
             // Buscar as ruas e nós dentro da área
-            Map<Long, List<Object>> streets = getStreetsWithNodesInNeighborhood(areaId);
+            Map<Long, List<Object>> streetsDataMap = getStreetsWithNodesInNeighborhood(areaId);
+            drawRouteWithNodes(streetsDataMap, "output/map_with_nodes.html");
 
-            // Exibir os resultados
+            /* // Exibir os resultados
             for (Map.Entry<Long, List<Object>> entry : streets.entrySet()) {
                 System.out.println("Way ID: " + entry.getKey());
                 System.out.println("Street Name: " + entry.getValue().get(0));
                 System.out.println("Nodes: " + entry.getValue().get(1));
                 System.out.println("-------------------");
-            }
+            } */
         } catch (Exception e) {
             e.printStackTrace();
         }

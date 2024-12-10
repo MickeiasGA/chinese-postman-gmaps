@@ -87,26 +87,7 @@ public class RealWorldChinesePostman {
         }
     }
 
-    /* public void adicionarRua(int origem, int destino) {
-        double[] pontoOrigem = cruzamentos.get(origem);
-        double[] pontoDestino = cruzamentos.get(destino);
-
-        float distancia = 0.0f;
-        // String nomeRua = "";
-        try {
-            distancia = ApiClient.getDistance(pontoOrigem[0], pontoOrigem[1], pontoDestino[0], pontoDestino[1]);
-            // nomeRua = ApiClient.getStreetName(pontoOrigem[0], pontoOrigem[1],
-            // pontoDestino[0], pontoDestino[1]);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        arcos[origem][destino]++;
-        custos[origem][destino] = distancia;
-        // nomesRuas[origem][destino] = nomeRua;
-    } */
-
-    public void adicionarRuas(String bairro, String cidade) {
+    public void adicionarRuas() {
         System.out.println("Adicionando ruas");
         try {
             if (this.streetDataMap == null || this.streetDataMap.isEmpty()) {
@@ -308,19 +289,19 @@ public class RealWorldChinesePostman {
 
         problema.descobrirCruzamentosPorBairro(bairro, cidade);
 
-        problema.adicionarRuas(bairro, cidade);
+        problema.adicionarRuas();
 
         problema.resolverProblema();
 
         System.out.print("Seu percurso será salvo em percurso.geojson: ");
         System.out.print(percurso.size());
-        String arquivo = "percurso.geojson";
+        //String arquivo = "percurso.geojson";
 
-        try {
-            ApiClient.saveRouteAsGeoJSON(percurso, "driving-car", arquivo);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        //try {
+        //    ApiClient.saveRouteAsGeoJSON(percurso, "driving-car", arquivo);
+        //} catch (IOException e) {
+        //    e.printStackTrace();
+        //}
 
         // problema.desenharPercurso();
     }
