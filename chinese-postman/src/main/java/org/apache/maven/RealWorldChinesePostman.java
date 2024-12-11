@@ -3,6 +3,10 @@ package org.apache.maven;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import org.apache.commons.math3.ml.clustering.DBSCANClusterer;
+import org.apache.commons.math3.ml.clustering.DoublePoint;
+import org.apache.commons.math3.ml.clustering.Cluster;
+import org.apache.commons.math3.geometry.euclidean.twod.Vector2D;
 
 public class RealWorldChinesePostman {
     private int N; // Número de cruzamentos (vértices)
@@ -26,22 +30,25 @@ public class RealWorldChinesePostman {
 
     public void descobrirCruzamentosPorBairro(String bairro, String cidade) {
         try {
-            Long id = ApiClient.getAreaIdByName(bairro, cidade);
+            Long id = ApiClient.getAreaId(bairro, cidade);
 
-            this.streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id); 
-    
+            this.streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);
+
             System.out.println("Conteúdo inicial de streetDataMap:");
-            /* for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
-                System.out.println("Rua ID: " + entry.getKey() + ", Nome: " + entry.getValue().get(0)  + ", Nós: " + entry.getValue().get(1));
-            } */
-    
+            /*
+             * for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
+             * System.out.println("Rua ID: " + entry.getKey() + ", Nome: " +
+             * entry.getValue().get(0) + ", Nós: " + entry.getValue().get(1));
+             * }
+             */
+
             Set<String> intersections = ApiClient.getIntersections(streetDataMap);
-    
+
             System.out.println("Cruzamentos detectados:");
             for (String intersection : intersections) {
                 System.out.println(intersection);
             }
-    
+
             List<Long> nodeIds = new ArrayList<>();
             for (String intersection : intersections) {
                 Long nodeId = encontrarIdNo(intersection);
@@ -49,11 +56,11 @@ public class RealWorldChinesePostman {
                     nodeIds.add(nodeId);
                 }
             }
-    
+
             for (int i = 0; i < nodeIds.size(); i += 3) {
                 List<Long> batch = nodeIds.subList(i, Math.min(i + 3, nodeIds.size()));
                 Map<Long, double[]> coordenadasBatch = ApiClient.getCoordinatesBatch(batch);
-    
+
                 for (Long nodeId : batch) {
                     double[] coordenadas = coordenadasBatch.get(nodeId);
                     if (coordenadas != null) {
@@ -65,7 +72,7 @@ public class RealWorldChinesePostman {
                     }
                 }
             }
-    
+
             this.N = cruzamentos.size();
             this.arcos = new int[N][N];
             this.custos = new float[N][N];
@@ -75,7 +82,6 @@ public class RealWorldChinesePostman {
             e.printStackTrace();
         }
     }
-    
 
     private Long encontrarIdNo(String intersection) {
         try {
@@ -105,17 +111,17 @@ public class RealWorldChinesePostman {
                 nosPorRua.computeIfAbsent(idRua, k -> new ArrayList<>()).addAll(nos);
             }
 
-            //System.out.println("idParaIndice carregado: " + this.idParaIndice);
-            //System.out.println("Nos agrupados por rua: " + nosPorRua);
-            //System.in.read();
+            // System.out.println("idParaIndice carregado: " + this.idParaIndice);
+            // System.out.println("Nos agrupados por rua: " + nosPorRua);
+            // System.in.read();
 
             for (Map.Entry<Long, List<Long>> rua : nosPorRua.entrySet()) {
                 Long idRua = rua.getKey();
                 List<Long> nos = rua.getValue();
                 System.out.println("Processando rua: " + idRua + " com nós: " + nos);
-                 for (Long no : nos) {
+                for (Long no : nos) {
                     System.out.println(no + " presente: " + idParaIndice.containsKey(no));
-                } 
+                }
 
                 for (int i = 0; i < nos.size(); i++) {
                     for (int j = i + 1; j < nos.size(); j++) {
@@ -255,6 +261,49 @@ public class RealWorldChinesePostman {
         return ciclo;
     }
 
+    public void dividirGrafoEmGrupos(int maxNosPorGrupo) {
+        try {
+            // Criação de uma lista de pontos (coordenadas dos cruzamentos) como DoublePoint
+            List<DoublePoint> pontos = new ArrayList<>();
+            for (double[] coordenadas : cruzamentos) {
+                pontos.add(new DoublePoint(coordenadas)); // Usando DoublePoint para representar os pontos
+            }
+
+            // DBSCAN com um epsilon (distância máxima) e um mínimo de pontos por grupo
+            double epsilon = 0.5; // Distância em graus (ajuste conforme necessário)
+            int minPts = 2; // Número mínimo de pontos para formar um cluster
+            DBSCANClusterer<DoublePoint> clusterer = new DBSCANClusterer<>(epsilon, minPts);
+
+            List<Cluster<DoublePoint>> clusters = clusterer.cluster(pontos);
+
+            // Dividindo os clusters em grupos de até maxNosPorGrupo
+            List<List<DoublePoint>> grupos = new ArrayList<>();
+            for (Cluster<DoublePoint> cluster : clusters) {
+                List<DoublePoint> pontosCluster = cluster.getPoints();
+                for (int i = 0; i < pontosCluster.size(); i += maxNosPorGrupo) {
+                    List<DoublePoint> grupo = pontosCluster.subList(i,
+                            Math.min(i + maxNosPorGrupo, pontosCluster.size()));
+                    grupos.add(grupo);
+                }
+            }
+
+            // Exibindo e salvando os grupos
+            System.out.println("Grupos de nós divididos:");
+            int grupoIndex = 1;
+            for (List<DoublePoint> grupo : grupos) {
+                System.out.println("Grupo " + grupoIndex++ + ":");
+                for (DoublePoint ponto : grupo) {
+                    System.out.println(ponto.getPoint()[0] + ", " + ponto.getPoint()[1]);
+                }
+                // Você pode adicionar código aqui para salvar os grupos em arquivos, se
+                // necessário.
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao dividir o grafo em grupos: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     public void desenharPercurso() {
         if (percurso == null || percurso.isEmpty()) {
             System.out.println("Nenhum percurso calculado para desenhar.");
@@ -281,29 +330,14 @@ public class RealWorldChinesePostman {
     public static void main(String[] args) throws Exception {
         RealWorldChinesePostman problema = new RealWorldChinesePostman();
 
-        String bairro = "Núcleo Residencial Jardim Fernanda";
-        System.out.print(bairro + "\n");
+        String bairro = "Parque Oziel";
         String cidade = "Campinas";
-        System.out.print(cidade + "\n");
 
         problema.descobrirCruzamentosPorBairro(bairro, cidade);
-
         problema.adicionarRuas();
-
         problema.resolverProblema();
 
-        System.out.print("Seu percurso será salvo em percurso.geojson: ");
-        System.out.print(percurso.size());
-        String arquivo = "percurso.geojson";
-
-        try {
-            ApiClient.saveRouteAsGeoJSON(percurso, arquivo);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        String outputPath = "rota.html";
-        ApiClient.saveRouteAsHTML(percurso, outputPath);
-
-        problema.desenharPercurso();
+        // Dividir os cruzamentos em grupos de até 70 nós
+        problema.dividirGrafoEmGrupos(70);
     }
 }
