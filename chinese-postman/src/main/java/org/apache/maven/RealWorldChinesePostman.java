@@ -297,10 +297,12 @@ public class RealWorldChinesePostman {
         String arquivo = "percurso.geojson";
 
         try {
-            ApiClient.saveRouteAsGeoJSON(percurso, "driving-car", arquivo);
+            ApiClient.saveRouteAsGeoJSON(percurso, arquivo);
         } catch (IOException e) {
             e.printStackTrace();
         }
+        String outputPath = "rota.html";
+        ApiClient.saveRouteAsHTML(percurso, outputPath);
 
         problema.desenharPercurso();
     }

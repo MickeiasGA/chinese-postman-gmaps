@@ -616,56 +616,41 @@ public class ApiClient {
         return jsArray.toString();
     }
 
-    public static void saveRouteAsGeoJSON(List<double[]> coordinates, String profile, String outputPath) throws IOException {
+    public static void saveRouteAsGeoJSON(List<double[]> coordinates, String outputPath) throws IOException {
         if (coordinates.size() < 2) {
             throw new IllegalArgumentException("Percurso inválido: menos de dois pontos disponíveis.");
         }
     
-        String url = "https://api.openrouteservice.org/v2/directions/" + profile + "/geojson";
-        OkHttpClient client = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build();
+        // Estrutura básica de um GeoJSON para uma rota (FeatureCollection)
+        JSONObject geoJSON = new JSONObject();
+        geoJSON.put("type", "FeatureCollection");
     
-        try {
-            JSONArray jsonCoordinates = new JSONArray();
-            for (double[] coord : coordinates) {
-                jsonCoordinates.put(new JSONArray(coord));
-            }
+        // Criação da lista de "features"
+        JSONArray features = new JSONArray();
     
-            JSONObject requestBody = new JSONObject();
-            requestBody.put("coordinates", jsonCoordinates);
+        // Criando uma feature para a rota
+        JSONObject feature = new JSONObject();
+        feature.put("type", "Feature");
+        feature.put("geometry", new JSONObject()
+            .put("type", "LineString")
+            .put("coordinates", new JSONArray(coordinates))
+        );
+        feature.put("properties", new JSONObject().put("name", "Rota"));
     
-            System.out.println("Corpo da requisição GeoJSON: " + requestBody.toString());
+        // Adicionando a feature ao array de features
+        features.put(feature);
     
-            RequestBody body = RequestBody.create(
-                requestBody.toString(),
-                MediaType.get("application/json; charset=utf-8")
-            );
+        // Adicionando o array de features ao GeoJSON principal
+        geoJSON.put("features", features);
     
-            Request request = new Request.Builder()
-                .url(url)
-                .post(body)
-                .addHeader("Authorization", ORS_KEY)
-                .build();
-    
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    throw new IOException("Erro ao buscar rota: " + response);
-                }
-    
-                String jsonResponse = response.body().string();
-                try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
-                    writer.write(jsonResponse);
-                }
-    
-                System.out.println("GeoJSON file created at: " + outputPath);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        // Escrevendo o GeoJSON no arquivo
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            writer.write(geoJSON.toString(4)); // "4" para formatar com identação
         }
+    
+        System.out.println("GeoJSON file created at: " + outputPath);
     }
-
+    
     public static void drawRouteWithNodes(Map<Long, List<Object>> streetsDataMap, String outputPath) throws IOException {
         StringBuilder htmlContent = new StringBuilder();
         
@@ -741,6 +726,65 @@ public class ApiClient {
     
         System.out.println("Map generated: " + outputPath);
     }
+
+    public static void saveRouteAsHTML(List<double[]> coordinates, String outputPath) throws IOException {
+        if (coordinates.size() < 2) {
+            throw new IllegalArgumentException("Percurso inválido: menos de dois pontos disponíveis.");
+        }
+    
+        // Construção do array de coordenadas no formato Leaflet (invertendo para [lat, lon])
+        StringBuilder latLngArray = new StringBuilder("[\n");
+        for (double[] coord : coordinates) {
+            latLngArray.append("[").append(coord[1]).append(", ").append(coord[0]).append("],\n");
+        }
+        latLngArray.append("]");
+    
+        // Template HTML com Leaflet.js
+        String htmlTemplate = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>Rota</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+                <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+            </head>
+            <body>
+                <div id="map" style="width: 100%; height: 100vh;"></div>
+                <script>
+                    // Coordenadas da rota
+                    const routeCoordinates = %s;
+    
+                    // Inicializar o mapa
+                    const map = L.map('map').setView(routeCoordinates[0], 15);
+    
+                    // Adicionar camada base do mapa
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+    
+                    // Adicionar a rota ao mapa
+                    const route = L.polyline(routeCoordinates, { color: 'blue', weight: 4 }).addTo(map);
+    
+                    // Ajustar o zoom para caber a rota
+                    map.fitBounds(route.getBounds());
+                </script>
+            </body>
+            </html>
+            """;
+    
+        // Substituir o placeholder %s pelo array de coordenadas
+        String htmlContent = String.format(htmlTemplate, latLngArray.toString());
+    
+        // Salvar o HTML no arquivo
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath))) {
+            writer.write(htmlContent);
+        }
+    
+        System.out.println("HTML file created at: " + outputPath);
+    }    
     
     public static void main(String[] args) {
         try {
