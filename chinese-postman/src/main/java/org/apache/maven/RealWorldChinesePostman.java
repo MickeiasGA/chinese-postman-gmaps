@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.util.*;
 import org.apache.commons.math3.ml.clustering.DBSCANClusterer;
 import org.apache.commons.math3.ml.clustering.DoublePoint;
+
+import com.google.gson.Gson;
+
 import org.apache.commons.math3.ml.clustering.Cluster;
 import org.apache.commons.math3.geometry.euclidean.twod.Vector2D;
 
@@ -181,7 +184,7 @@ public class RealWorldChinesePostman {
                 delta[j] += arcos[i][j];
             }
         }
-
+    
         List<Integer> positivos = new ArrayList<>();
         List<Integer> negativos = new ArrayList<>();
         for (int i = 0; i < N; i++) {
@@ -190,7 +193,7 @@ public class RealWorldChinesePostman {
             else if (delta[i] < 0)
                 negativos.add(i);
         }
-
+    
         int[][] novoGrafo = new int[N][N];
         float[][] novoCusto = new float[N][N];
         for (int i = 0; i < N; i++) {
@@ -199,33 +202,40 @@ public class RealWorldChinesePostman {
                 novoCusto[i][j] = custos[i][j];
             }
         }
-
+    
         while (!positivos.isEmpty() && !negativos.isEmpty()) {
             int u = positivos.get(0);
             int v = negativos.get(0);
             int quantidade = Math.min(delta[u], -delta[v]);
-
+    
             novoGrafo[u][v] += quantidade;
             novoCusto[u][v] += custos[u][v];
-
+    
             delta[u] -= quantidade;
             delta[v] += quantidade;
-
+    
             if (delta[u] == 0)
                 positivos.remove(0);
             if (delta[v] == 0)
                 negativos.remove(0);
         }
-
+    
         List<Integer> cicloEuleriano = encontrarCicloEuleriano(novoGrafo);
         List<double[]> percursoCoordenadas = new ArrayList<>();
         for (int indice : cicloEuleriano) {
-            percursoCoordenadas.add(cruzamentos.get(indice));
+            double[] coordenadasOriginais = cruzamentos.get(indice);
+            // Invertendo as coordenadas (latitude e longitude)
+            double[] coordenadasInvertidas = {coordenadasOriginais[1], coordenadasOriginais[0]};
+            percursoCoordenadas.add(coordenadasInvertidas);
         }
-
+    
         RealWorldChinesePostman.percurso = percursoCoordenadas;
+        for (double[] coordenada : percursoCoordenadas){
+            System.out.printf(" - Coordenada: [%.6f, %.6f]%n", coordenada[0], coordenada[1]);
+        }
         return percursoCoordenadas;
     }
+    
 
     private List<Integer> encontrarCicloEuleriano(int[][] grafoBalanceado) {
         List<Integer> ciclo = new ArrayList<>();
@@ -261,46 +271,53 @@ public class RealWorldChinesePostman {
         return ciclo;
     }
 
-    public void dividirGrafoEmGrupos(int maxNosPorGrupo) {
+    public String dividirGrafoEmGrupos(int maxNosPorGrupo) {
         try {
             // Criação de uma lista de pontos (coordenadas dos cruzamentos) como DoublePoint
             List<DoublePoint> pontos = new ArrayList<>();
             for (double[] coordenadas : cruzamentos) {
                 pontos.add(new DoublePoint(coordenadas)); // Usando DoublePoint para representar os pontos
             }
-
+    
             // DBSCAN com um epsilon (distância máxima) e um mínimo de pontos por grupo
             double epsilon = 0.5; // Distância em graus (ajuste conforme necessário)
             int minPts = 2; // Número mínimo de pontos para formar um cluster
             DBSCANClusterer<DoublePoint> clusterer = new DBSCANClusterer<>(epsilon, minPts);
-
+    
             List<Cluster<DoublePoint>> clusters = clusterer.cluster(pontos);
-
+    
             // Dividindo os clusters em grupos de até maxNosPorGrupo
-            List<List<DoublePoint>> grupos = new ArrayList<>();
+            List<List<double[]>> grupos = new ArrayList<>();
             for (Cluster<DoublePoint> cluster : clusters) {
                 List<DoublePoint> pontosCluster = cluster.getPoints();
                 for (int i = 0; i < pontosCluster.size(); i += maxNosPorGrupo) {
-                    List<DoublePoint> grupo = pontosCluster.subList(i,
+                    List<DoublePoint> grupoCluster = pontosCluster.subList(i,
                             Math.min(i + maxNosPorGrupo, pontosCluster.size()));
+                    List<double[]> grupo = new ArrayList<>();
+                    for (DoublePoint ponto : grupoCluster) {
+                        double[] invertido = { ponto.getPoint()[1], ponto.getPoint()[0] }; // Invertendo latitude e
+                                                                                           // longitude
+                        grupo.add(invertido);
+                    }
                     grupos.add(grupo);
                 }
             }
-
-            // Exibindo e salvando os grupos
-            System.out.println("Grupos de nós divididos:");
-            int grupoIndex = 1;
-            for (List<DoublePoint> grupo : grupos) {
-                System.out.println("Grupo " + grupoIndex++ + ":");
-                for (DoublePoint ponto : grupo) {
-                    System.out.println(ponto.getPoint()[0] + ", " + ponto.getPoint()[1]);
-                }
-                // Você pode adicionar código aqui para salvar os grupos em arquivos, se
-                // necessário.
+    
+            // Convertendo o primeiro grupo para JSON no formato solicitado
+            if (!grupos.isEmpty()) {
+                Map<String, Object> resultado = new HashMap<>();
+                resultado.put("coordinates", grupos.get(0));
+    
+                // Convertendo para JSON usando Gson
+                Gson gson = new Gson();
+                return gson.toJson(resultado);
+            } else {
+                return "{}"; // Retorna um objeto JSON vazio se não houver grupos
             }
         } catch (Exception e) {
             System.err.println("Erro ao dividir o grafo em grupos: " + e.getMessage());
             e.printStackTrace();
+            return "{}"; // Retorna um objeto JSON vazio em caso de erro
         }
     }
 
@@ -337,7 +354,6 @@ public class RealWorldChinesePostman {
         problema.adicionarRuas();
         problema.resolverProblema();
 
-        // Dividir os cruzamentos em grupos de até 70 nós
-        problema.dividirGrafoEmGrupos(70);
+        System.err.println(problema.dividirGrafoEmGrupos(70));
     }
 }

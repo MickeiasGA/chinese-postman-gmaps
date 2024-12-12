@@ -385,7 +385,7 @@ public class ApiClient {
         System.err.println("Falha em todos os servidores para este lote.");
         return coordinatesMap; // Retorna vazio se todos os servidores falharem
     }    
-
+/* 
     public static List<double[]> getStreetSegments(Map<Long, List<Object>> streetDataMap,
             Long nodeId1,
             Long nodeId2,
@@ -402,8 +402,8 @@ public class ApiClient {
             System.err.println("Coordenadas inválidas para os cruzamentos.");
             return new ArrayList<>();
         }
-    }
-
+    } */
+/* 
     public static List<double[]> getRoute(double[] start, double[] end, String apiKey, String profile) {
         String url = "https://api.openrouteservice.org/v2/directions/" + profile;
         OkHttpClient client = new OkHttpClient.Builder()
@@ -454,7 +454,7 @@ public class ApiClient {
             return null;
         }
     }
-
+ */
     public static void drawSimpleRoute(double[] start, double[] end,
             String apiKey, String profile,
             String outputPath) throws IOException {
