@@ -38,12 +38,6 @@ public class RealWorldChinesePostman {
             this.streetDataMap = ApiClient.getStreetsWithNodesInNeighborhood(id);
 
             System.out.println("Conteúdo inicial de streetDataMap:");
-            /*
-             * for (Map.Entry<Long, List<Object>> entry : streetDataMap.entrySet()) {
-             * System.out.println("Rua ID: " + entry.getKey() + ", Nome: " +
-             * entry.getValue().get(0) + ", Nós: " + entry.getValue().get(1));
-             * }
-             */
 
             Set<String> intersections = ApiClient.getIntersections(streetDataMap);
 
@@ -113,10 +107,6 @@ public class RealWorldChinesePostman {
 
                 nosPorRua.computeIfAbsent(idRua, k -> new ArrayList<>()).addAll(nos);
             }
-
-            // System.out.println("idParaIndice carregado: " + this.idParaIndice);
-            // System.out.println("Nos agrupados por rua: " + nosPorRua);
-            // System.in.read();
 
             for (Map.Entry<Long, List<Long>> rua : nosPorRua.entrySet()) {
                 Long idRua = rua.getKey();
